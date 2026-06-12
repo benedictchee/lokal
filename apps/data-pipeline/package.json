@@ -7,8 +7,11 @@
     "typecheck": "tsc -b tsconfig.json",
     "test": "vitest run",
     "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply travel-groups --local",
     "ingest": "tsx src/cli.ts ingest",
-    "bootstrap:vectorize": "tsx scripts/bootstrap-vectorize.ts"
+    "map": "tsx scripts/build-map.ts",
+    "bootstrap:vectorize": "tsx scripts/bootstrap-vectorize.ts",
+    "ingest:gtfs": "tsx scripts/ingest-gtfs.ts"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.3",
@@ -21,7 +24,10 @@
     "@cloudflare/vitest-pool-workers": "^0.12.21",
     "@cloudflare/workers-types": "^4.20250121.0",
     "@duckdb/node-api": "1.5.3-r.3",
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^25.9.3",
+    "adm-zip": "^0.5.17",
+    "csv-parse": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5",

@@ -13,3 +13,5 @@ export { NdjsonR2LakeWriter } from './lake/ndjson-r2.js';
 export { bucketByR7, buildGroupBlobs } from './serving/blob-builder.js';
 export { composeEmbedText } from './embed/embed-text.js';
 export { osmElementToRecord } from './normalize/osm.js';
+export { gtfsStopToRecord, routeTypeToCategory } from './normalize/gtfs.js';
+export type { GtfsStop, GtfsStopOpts } from './normalize/gtfs.js';
