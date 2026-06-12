@@ -4,3 +4,5 @@ dist/
 *.tsbuildinfo
 coverage/
 .DS_Store
+# Scraped Google Maps output — raw data, do not commit
+apps/data-pipeline/scripts/out/
