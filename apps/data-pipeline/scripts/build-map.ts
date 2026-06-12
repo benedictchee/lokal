@@ -1,7 +1,7 @@
 // Throwaway viz: read the LOCAL R2 lake object the producer wrote and render the
 // George Town POIs on a Leaflet map (self-contained HTML, opens with file://).
 import { writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { getPlatformProxy } from 'wrangler';
 import type { Env } from '../src/env.js';
 
@@ -75,7 +75,7 @@ for(const c of TOP){const d=document.createElement('div');d.innerHTML='<span cla
 const o=document.createElement('div');o.innerHTML='<span class="dot" style="background:#9aa0a6"></span>other';leg.appendChild(o);
 </script></body></html>`;
 
-    const out = fileURLToPath(new URL('../viz/georgetown.html', import.meta.url));
+    const out = join(import.meta.dirname, '../viz/georgetown.html');
     writeFileSync(out, html);
     console.log(`wrote ${out}`);
     console.log(`points: ${points.length}  top categories: ${top.slice(0, 6).join(', ')}`);
