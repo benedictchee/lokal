@@ -55,17 +55,24 @@ describe('IngestRegion integration smoke', () => {
   });
 
   it('produces raw, lake, group blobs, and queue messages from the golden fixture', async () => {
+    // Capture the fetch call so we can assert the Overpass query body.
+    let capturedFetchBody: string | null = null;
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(fixture, { status: 200 })),
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        capturedFetchBody = typeof init?.body === 'string' ? init.body : null;
+        return new Response(fixture, { status: 200 });
+      }),
     );
 
     const sent: EnrichMessage[] = [];
     const testEnv = captureEnv(sent);
+    // Fix 1: bbox in [south, west, north, east] order; contains golden-fixture
+    // coords at ~lat 5.41, lon 100.33.
     const params: IngestParams = {
       source: 'osm',
       region: 'penang',
-      bbox: [100.32, 5.41, 100.34, 5.42],
+      bbox: [5.40, 100.30, 5.43, 100.35],
       dataVersion: 7,
     };
 
@@ -77,6 +84,13 @@ describe('IngestRegion integration smoke', () => {
 
     // 2 usable records (bench element dropped: no name).
     expect(summary.recordCount).toBe(2);
+
+    // (0) Assert the Overpass query body sent to fetch has the correctly-ordered bbox.
+    // This regression-tests the bbox-order bug class.
+    expect(capturedFetchBody).not.toBeNull();
+    const decodedQuery = decodeURIComponent(capturedFetchBody!.replace(/^data=/, ''));
+    // [south,west,north,east] = (5.4,100.3,5.43,100.35)
+    expect(decodedQuery).toContain('(5.4,100.3,5.43,100.35)');
 
     // (1) raw object written under raw/osm/<hash> before parsing.
     const rawList = await env.DATA.list({ prefix: 'raw/osm/' });

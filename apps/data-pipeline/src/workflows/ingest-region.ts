@@ -11,12 +11,16 @@ import {
 import { D1GroupRegistry } from '../registry-d1.js';
 import type { Env, IngestParams, EnrichMessage } from '../env.js';
 
+// Fix 8: single source of truth for the Overpass endpoint and user-agent.
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
 const USER_AGENT = 'travel-data-pipeline/1.0 (+management@rushowl.app)';
 
-/** Build the Overpass-QL POI query for a given bbox. */
+/** Build the Overpass-QL POI query for a given bbox.
+ *  bbox convention: [south, west, north, east] */
 function buildOverpassQuery(bbox: [number, number, number, number]): string {
   const [south, west, north, east] = bbox;
+  // Fix 3: defence-in-depth — reject non-finite coordinates before building query.
+  if (![south, west, north, east].every(Number.isFinite)) throw new Error('invalid bbox');
   const box = `(${south},${west},${north},${east})`;
   return [
     '[out:json][timeout:180];',
@@ -32,7 +36,8 @@ function buildOverpassQuery(bbox: [number, number, number, number]): string {
 export interface IngestSummary {
   rawKey: string;
   lakeKey: string;
-  blobKeys: string[];
+  /** Fix 6: number of group blobs written (not an unbounded keys array). */
+  blobCount: number;
   recordCount: number;
 }
 
@@ -97,10 +102,10 @@ export async function runIngest(
   // (1) Fetch Overpass -> land raw payload in R2 BEFORE parsing (replayable).
   // Store the exact response text so re-plays are byte-identical.
   const rawKey = (await step.do('fetch-and-land-raw', stepCfg, async () => {
-    const res = await globalThis.fetch('https://overpass-api.de/api/interpreter', {
+    const res = await globalThis.fetch(OVERPASS_ENDPOINT, {
       method: 'POST',
       headers: {
-        'User-Agent': 'travel-data-pipeline/1.0 (+management@rushowl.app)',
+        'User-Agent': USER_AGENT,
         'content-type': 'application/x-www-form-urlencoded',
       },
       body: `data=${encodeURIComponent(buildOverpassQuery(bbox))}`,
@@ -111,10 +116,14 @@ export async function runIngest(
   })) as string;
 
   // (2) Normalize + entity-resolution -> group_uuid, data_version, raw_r2_key.
-  // Records are recomputed from the raw blob (deterministic); step returns only count.
-  const records = await materializeRecords(env, rawKey, source, dataVersion);
+  // Fix 5: Wrapped in step.do so it is retry-checkpointed and replay-safe.
+  // NOTE: returning the resolved records array is fine for v1's small counts,
+  // but the ~1 MB step-return cap is a scale limit to revisit on the bulk path.
+  const records = (await step.do('normalize-and-resolve', stepCfg, async () => {
+    return materializeRecords(env, rawKey, source, dataVersion);
+  })) as TravelRecord[];
 
-  const recordCount = (await step.do('normalize-and-resolve', stepCfg, async () => records.length)) as number;
+  const recordCount = records.length;
 
   // (3) LakeWriter.append -> NDJSON->R2 at the DETERMINISTIC key.
   const lakeKey = (await step.do('lake-append', stepCfg, async () => {
@@ -124,13 +133,14 @@ export async function runIngest(
   })) as string;
 
   // (4) Build r7 group blobs -> R2 (deterministic groups/r7/<h3_r7> keys; retries overwrite).
-  const blobKeys = (await step.do('build-group-blobs', stepCfg, async () => {
+  // Fix 6: return count (not unbounded keys array) to stay well within step-return cap.
+  const blobCount = (await step.do('build-group-blobs', stepCfg, async () => {
     const blobs = buildGroupBlobs(records, dataVersion);
     await Promise.all(
       blobs.map((b) => env.DATA.put(b.key, b.body, { httpMetadata: { contentType: 'application/json' } })),
     );
-    return blobs.map((b) => b.key);
-  })) as string[];
+    return blobs.length;
+  })) as number;
 
   // (5) Enqueue one enrich message per record {record_uuid,h3_r7,source}.
   await step.do('enqueue-enrich', stepCfg, async () => {
@@ -144,7 +154,7 @@ export async function runIngest(
     return messages.length;
   });
 
-  return { rawKey, lakeKey, blobKeys, recordCount };
+  return { rawKey, lakeKey, blobCount, recordCount };
 }
 
 export class IngestRegion extends WorkflowEntrypoint<Env, IngestParams> {

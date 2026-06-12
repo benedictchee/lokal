@@ -21,6 +21,8 @@ export interface Env {
   AI: Ai;
   INGEST: Workflow<IngestParams>;
   DATA_VERSION: string;
+  /** Secret set via `wrangler secret put INGEST_TOKEN`. Required to call POST /ingest. */
+  INGEST_TOKEN?: string;
 }
 
 // Re-export so the registry impl (Task 8) and workflow share one symbol.

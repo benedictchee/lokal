@@ -39,9 +39,19 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const region = args['region'] ?? '';
-  const dataVersion = Number(args['data-version']);
-  if (!region || Number.isNaN(dataVersion)) {
-    console.error('--region and --data-version are required');
+  // Fix 7: Number('') === 0 (not NaN), so check explicitly for missing/empty before converting.
+  const dvRaw = args['data-version'];
+  if (!dvRaw) {
+    console.error('--data-version is required');
+    process.exit(1);
+  }
+  const dataVersion = Number(dvRaw);
+  if (Number.isNaN(dataVersion)) {
+    console.error('--data-version must be a number');
+    process.exit(1);
+  }
+  if (!region) {
+    console.error('--region is required');
     process.exit(1);
   }
   const params: IngestParams = {

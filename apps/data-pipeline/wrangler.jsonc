@@ -10,6 +10,10 @@
 
   "vars": { "DATA_VERSION": "1" },
 
+  // INGEST_TOKEN is a secret — set it via:  wrangler secret put INGEST_TOKEN
+  // Never hardcode the value here. POST /ingest requires Authorization: Bearer <token>.
+
+
   // SoT lake + raw landing + r7 cold blobs all live in ONE bucket.
   // `wrangler dev` must use remote:true so reads/writes hit real R2.
   "r2_buckets": [
