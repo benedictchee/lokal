@@ -1,0 +1,21 @@
+{
+  "name": "travel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "proto:gen": "buf generate",
+    "build": "pnpm -r --filter \"./packages/**\" run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.50.0",
+    "@bufbuild/protoc-gen-es": "^2.2.3",
+    "typescript": "^5.7.3"
+  }
+}
