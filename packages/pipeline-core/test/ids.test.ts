@@ -28,8 +28,8 @@ describe('recordUuid', () => {
     expect(set.size).toBe(3);
   });
 
-  it('joins source and sourceId with a single colon (matches uuidv5 over "source:sourceId")', () => {
-    expect(recordUuid('osm', 'node/123')).toBe(uuidv5('osm:node/123', NS_RECORD));
+  it('joins source and sourceId with ASCII Unit Separator \\x1f (matches uuidv5 over "source\\x1fsourceId")', () => {
+    expect(recordUuid('osm', 'node/123')).toBe(uuidv5('osm\x1fnode/123', NS_RECORD));
   });
 
   it('does not collapse a moved colon: ("a:b","c") !== ("a","b:c")', () => {
