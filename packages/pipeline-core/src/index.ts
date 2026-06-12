@@ -6,3 +6,5 @@ export * from './h3.js';
 export * from './ids.js';
 export * from './grouping/alias.js';
 export * from './grouping/registry.js';
+export * from './fetchers/overpass.js';
+export * from './lake/raw.js';

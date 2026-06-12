@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "composite": true
+    "composite": true,
+    "types": ["@cloudflare/workers-types"]
   },
   "references": [{ "path": "../proto-ts" }],
   "include": ["src/**/*.ts"]

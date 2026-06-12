@@ -1,0 +1,29 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62",
+  "osm3s": {
+    "timestamp_osm_base": "2026-06-12T00:00:00Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+    {
+      "type": "node",
+      "id": 1001,
+      "lat": 1.3000,
+      "lon": 103.8000,
+      "tags": { "amenity": "restaurant", "name": "Maxwell Food Centre", "cuisine": "hawker" }
+    },
+    {
+      "type": "way",
+      "id": 2002,
+      "center": { "lat": 1.3010, "lon": 103.8010 },
+      "tags": { "shop": "supermarket", "name": "FairPrice", "brand:wikidata": "Q5430873" }
+    },
+    {
+      "type": "relation",
+      "id": 3003,
+      "center": { "lat": 1.3020, "lon": 103.8020 },
+      "tags": { "tourism": "museum", "name": "National Museum" }
+    }
+  ]
+}
