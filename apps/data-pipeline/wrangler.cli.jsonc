@@ -1,0 +1,29 @@
+{
+  // Stripped-down wrangler config for local CLI runs (getPlatformProxy).
+  // Omits workflows/vectorize/ai bindings that Miniflare cannot serve locally
+  // creds-free. The CLI producer only uses DATA (R2), GROUPS (D1), ENRICH (Queue).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "travel-data-pipeline",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "vars": { "DATA_VERSION": "1" },
+
+  "r2_buckets": [
+    { "binding": "DATA", "bucket_name": "travel-data" }
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "GROUPS",
+      "database_name": "travel-groups",
+      "database_id": "REPLACE_WITH_D1_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "queues": {
+    "producers": [{ "binding": "ENRICH", "queue": "travel-enrich" }]
+  }
+}

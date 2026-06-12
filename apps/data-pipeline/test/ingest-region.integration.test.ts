@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { env } from 'cloudflare:test';
 import migrationSql from '../migrations/0001_groups.sql?raw';
 import fixtureRaw from './fixtures/overpass-golden.json?raw';
-import { IngestRegion, runIngest } from '../src/workflows/ingest-region.js';
+import { IngestRegion } from '../src/workflows/ingest-region.js';
+import { runIngest } from '../src/run-ingest.js';
 import type { Env, IngestParams, EnrichMessage } from '../src/env.js';
 
 const fixture = fixtureRaw;

@@ -7,7 +7,7 @@
     "typecheck": "tsc -b tsconfig.json",
     "test": "vitest run",
     "deploy": "wrangler deploy",
-    "ingest": "tsx src/cli.ts",
+    "ingest": "tsx src/cli.ts ingest",
     "bootstrap:vectorize": "tsx scripts/bootstrap-vectorize.ts"
   },
   "dependencies": {

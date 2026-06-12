@@ -60,10 +60,11 @@ async function main(): Promise<void> {
     dataVersion,
   };
 
-  // Dynamic import so cloudflare:workers (WorkflowEntrypoint) is only resolved
-  // after arg validation passes — keeps the empty-args path Node-clean.
-  const { runIngest } = await import('./workflows/ingest-region.js');
-  const { env, dispose } = await getPlatformProxy<Env>({ configPath: 'wrangler.jsonc' });
+  // Import from run-ingest.ts which has no cloudflare:* imports — Node-clean.
+  const { runIngest } = await import('./run-ingest.js');
+  // wrangler.cli.jsonc omits workflows/vectorize/ai which Miniflare cannot
+  // serve locally creds-free; the producer only needs DATA/GROUPS/ENRICH.
+  const { env, dispose } = await getPlatformProxy<Env>({ configPath: 'wrangler.cli.jsonc' });
   try {
     const summary = await runIngest(env, { payload: params }, localStep());
     console.log(JSON.stringify(summary, null, 2));
