@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package travel.data.v1;
+
+// Canonical travel data record — the SCHEMA source-of-truth and cross-subsystem
+// wire type. Projected to NDJSON (lake), R2 blob payloads, D1 rows, and
+// Vectorize metadata. See docs/superpowers/specs/2026-06-12-data-pipeline-design.md §5.
+// NOTE: pipeline processing uses a plain snake_case TS interface (TravelRecord,
+// Task 1), not the generated camelCase class. This message is the wire/schema
+// contract only.
+message Record {
+  // uuidv5("${source}:${source_id}") — stable; re-scrape yields the same id.
+  string record_uuid = 1;
+  // Program-minted UUIDv7 from the D1 group registry (aliases are signals, not identity).
+  string group_uuid = 2;
+  // poi | transport | (future)
+  string subject = 3;
+  // restaurant/hotel/… or train/hsr/mrt/light_rail/bus/cable_car
+  string category = 4;
+  string name = 5;
+  double lat = 6;
+  double lng = 7;
+  // 15-char lowercase hex H3 cells. r10 = latLngToCell; r7/r5 = cellToParent(r10,…).
+  string h3_r5 = 8;
+  string h3_r7 = 9;
+  string h3_r10 = 10;
+  // Subject-specific JSON string — keeps the model extensible without migrations.
+  string attributes = 11;
+  string source = 12;
+  string source_id = 13;
+  string source_url = 14;
+  string raw_r2_key = 15;
+  string lang = 16;
+  string content_hash = 17;
+  // Monotonic ingest version stamp.
+  int64 data_version = 18;
+}
