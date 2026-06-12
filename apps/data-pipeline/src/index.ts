@@ -4,8 +4,9 @@ import type { Env, IngestParams, EnrichMessage } from './env.js';
 
 // Default region seeded for cron re-ingest; ad-hoc runs override via POST body.
 // Convention: bbox = [south, west, north, east] (Overpass order).
-const CRON_REGIONS: IngestParams[] = [
-  { source: 'osm', region: 'penang', bbox: [5.2, 100.2, 5.5, 100.5], dataVersion: 0 },
+// dataVersion is intentionally omitted — the scheduled handler always injects env.DATA_VERSION.
+const CRON_REGIONS: Omit<IngestParams, 'dataVersion'>[] = [
+  { source: 'osm', region: 'penang', bbox: [5.2, 100.2, 5.5, 100.5] },
 ];
 
 /** Constant-time string comparison via SubtleCrypto to resist timing attacks. */

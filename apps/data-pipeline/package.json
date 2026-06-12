@@ -6,7 +6,9 @@
   "scripts": {
     "typecheck": "tsc -b tsconfig.json",
     "test": "vitest run",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "ingest": "tsx src/cli.ts",
+    "bootstrap:vectorize": "tsx scripts/bootstrap-vectorize.ts"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.3",
@@ -20,6 +22,7 @@
     "@cloudflare/workers-types": "^4.20250121.0",
     "@duckdb/node-api": "1.5.3-r.3",
     "@types/node": "^25.9.3",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5",
     "wrangler": "^3.107.0"

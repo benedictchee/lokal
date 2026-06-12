@@ -24,7 +24,9 @@ export const file_travel_data_v1_record: GenFile = /*@__PURE__*/
  */
 export type Record = Message<"travel.data.v1.Record"> & {
   /**
-   * uuidv5("${source}:${source_id}") — stable; re-scrape yields the same id.
+   * uuidv5("${source}\x1f${source_id}", NS_RECORD) — stable; re-scrape yields the same id.
+   * The separator is ASCII Unit Separator (U+001F, \x1f), not a colon, to prevent
+   * ("a:b","c") vs ("a","b:c") collisions. NS_RECORD is the pinned namespace UUID.
    *
    * @generated from field: string record_uuid = 1;
    */

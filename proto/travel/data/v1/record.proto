@@ -9,7 +9,9 @@ package travel.data.v1;
 // Task 1), not the generated camelCase class. This message is the wire/schema
 // contract only.
 message Record {
-  // uuidv5("${source}:${source_id}") — stable; re-scrape yields the same id.
+  // uuidv5("${source}\x1f${source_id}", NS_RECORD) — stable; re-scrape yields the same id.
+  // The separator is ASCII Unit Separator (U+001F, \x1f), not a colon, to prevent
+  // ("a:b","c") vs ("a","b:c") collisions. NS_RECORD is the pinned namespace UUID.
   string record_uuid = 1;
   // Program-minted UUIDv7 from the D1 group registry (aliases are signals, not identity).
   string group_uuid = 2;

@@ -1,11 +1,7 @@
 import { NonRetryableError } from 'cloudflare:workflows';
 import { composeEmbedText, recordMetadata, type TravelRecord } from '@travel/pipeline-core';
-
-export interface EnrichMessage {
-  record_uuid: string;
-  h3_r7: string;
-  source: string;
-}
+import type { EnrichMessage } from '../env.js';
+export type { EnrichMessage };
 
 export interface EnrichEnv {
   DATA: R2Bucket;

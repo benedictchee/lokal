@@ -1,5 +1,4 @@
 import { getPlatformProxy } from 'wrangler';
-import { runIngest } from './workflows/ingest-region.js';
 import type { Env, IngestParams } from './env.js';
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -61,6 +60,9 @@ async function main(): Promise<void> {
     dataVersion,
   };
 
+  // Dynamic import so cloudflare:workers (WorkflowEntrypoint) is only resolved
+  // after arg validation passes — keeps the empty-args path Node-clean.
+  const { runIngest } = await import('./workflows/ingest-region.js');
   const { env, dispose } = await getPlatformProxy<Env>({ configPath: 'wrangler.jsonc' });
   try {
     const summary = await runIngest(env, { payload: params }, localStep());
