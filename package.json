@@ -10,7 +10,7 @@
   "scripts": {
     "proto:gen": "buf generate",
     "build": "pnpm -r --filter \"./packages/**\" run build",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p packages/proto-ts/tsconfig.test.json --noEmit && tsc -p packages/pipeline-core/tsconfig.test.json --noEmit && tsc -p apps/data-pipeline/tsconfig.scripts.json --noEmit",
     "test": "pnpm -r run test"
   },
   "devDependencies": {

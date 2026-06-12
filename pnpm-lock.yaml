@@ -45,6 +45,9 @@ importers:
       '@duckdb/node-api':
         specifier: 1.5.3-r.3
         version: 1.5.3-r.3
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -73,6 +76,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250121.0
         version: 4.20260612.1
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -86,6 +92,9 @@ importers:
         specifier: ^2.2.3
         version: 2.12.0
     devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -2361,7 +2370,6 @@ snapshots:
   '@types/node@25.9.3':
     dependencies:
       undici-types: 7.24.6
-    optional: true
 
   '@typescript/vfs@1.6.4(typescript@5.4.5)':
     dependencies:
@@ -2824,8 +2832,7 @@ snapshots:
 
   ufo@1.6.4: {}
 
-  undici-types@7.24.6:
-    optional: true
+  undici-types@7.24.6: {}
 
   undici@5.29.0:
     dependencies:

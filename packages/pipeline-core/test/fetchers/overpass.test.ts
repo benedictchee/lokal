@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchOverpass, type OverpassElement } from '../../src/fetchers/overpass.js';
 
 const fixtureUrl = new URL('../fixtures/overpass-response.json', import.meta.url);
-const fixtureText = await readFile(fileURLToPath(fixtureUrl), 'utf8');
+const fixtureText = await readFile(fileURLToPath(fixtureUrl.href), 'utf8');
 
 function mockFetch(body: string, ok = true, status = 200): typeof fetch {
   return vi.fn(async () =>

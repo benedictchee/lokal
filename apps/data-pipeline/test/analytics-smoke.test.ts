@@ -61,6 +61,7 @@ describe("analytics smoke: DuckDB over lake NDJSON.gz (spec §11)", () => {
       expect(Number(n)).toBe(sampleRecords.length); // 6
     } finally {
       connection.closeSync();
+      instance.closeSync();
     }
   });
 
@@ -83,6 +84,7 @@ describe("analytics smoke: DuckDB over lake NDJSON.gz (spec §11)", () => {
       expect(got).toEqual(expectedCategoryCounts); // {restaurant:3,cafe:2,hotel:1}
     } finally {
       connection.closeSync();
+      instance.closeSync();
     }
   });
 
@@ -99,6 +101,7 @@ describe("analytics smoke: DuckDB over lake NDJSON.gz (spec §11)", () => {
       expect(versions).toEqual([SAMPLE_DATA_VERSION]); // [7]
     } finally {
       connection.closeSync();
+      instance.closeSync();
     }
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
-import { Record, RecordSchema } from "@travel/proto-ts";
+import { type Record, RecordSchema } from "@travel/proto-ts";
 
 describe("@travel/proto-ts smoke", () => {
   it("creates a Record from RecordSchema with all canonical fields", () => {

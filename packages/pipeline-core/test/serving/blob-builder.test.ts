@@ -73,6 +73,6 @@ describe('buildGroupBlobs', () => {
   it('stamps the passed data_version, not the per-record one', () => {
     const a = rec({ record_uuid: 'a', h3_r7: 'cellA', data_version: 1 });
     const [blob] = buildGroupBlobs([a], 99);
-    expect(JSON.parse(blob.body).data_version).toBe(99);
+    expect(JSON.parse(blob!.body).data_version).toBe(99);
   });
 });

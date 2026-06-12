@@ -12,9 +12,9 @@ function makeR2Stub() {
       if (value instanceof ArrayBuffer) {
         buf = value;
       } else if (ArrayBuffer.isView(value)) {
-        buf = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+        buf = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
       } else if (typeof value === 'string') {
-        buf = new TextEncoder().encode(value).buffer;
+        buf = new TextEncoder().encode(value).buffer as ArrayBuffer;
       } else {
         // ReadableStream
         buf = await new Response(value as ReadableStream).arrayBuffer();
@@ -95,7 +95,7 @@ function makeR2Stub() {
     async delete(keys: string | string[]) {},
     async head(key: string) { return null; },
     async createMultipartUpload(key: string) { throw new Error('not implemented'); },
-    async resumeMultipartUpload(key: string, uploadId: string) { throw new Error('not implemented'); },
+    resumeMultipartUpload(key: string, uploadId: string): R2MultipartUpload { throw new Error('not implemented'); },
   };
 
   return { bucket, store };
@@ -154,8 +154,8 @@ describe('NdjsonR2LakeWriter', () => {
     const parsed = lines.map((l) => JSON.parse(l) as TravelRecord);
     expect(parsed.map((r) => r.record_uuid)).toEqual(['a', 'b', 'c']);
     // snake_case fields survive the NDJSON round-trip
-    expect(parsed[0].content_hash).toBe('deadbeef');
-    expect(parsed[0].group_uuid).toBe('g-uuid');
+    expect(parsed[0]!.content_hash).toBe('deadbeef');
+    expect(parsed[0]!.group_uuid).toBe('g-uuid');
   });
 
   it('derives the key from subject of the first record (poi)', async () => {
@@ -181,7 +181,7 @@ describe('NdjsonR2LakeWriter', () => {
 
     const listed = await bucket.list({ prefix: 'lake/poi/kl/' });
     expect(listed.objects).toHaveLength(1);
-    expect(listed.objects[0].key).toBe('lake/poi/kl/v9.ndjson.gz');
+    expect(listed.objects[0]!.key).toBe('lake/poi/kl/v9.ndjson.gz');
 
     const lines = (await readGzObject(bucket, 'lake/poi/kl/v9.ndjson.gz'))
       .split('\n')
