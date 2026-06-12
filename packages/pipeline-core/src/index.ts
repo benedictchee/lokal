@@ -12,3 +12,4 @@ export type { LakeWriter } from './lake/lake-writer.js';
 export { NdjsonR2LakeWriter } from './lake/ndjson-r2.js';
 export { bucketByR7, buildGroupBlobs } from './serving/blob-builder.js';
 export { composeEmbedText } from './embed/embed-text.js';
+export { osmElementToRecord } from './normalize/osm.js';

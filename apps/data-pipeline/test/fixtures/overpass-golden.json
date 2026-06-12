@@ -1,0 +1,40 @@
+{
+  "elements": [
+    {
+      "type": "node",
+      "id": 1001,
+      "lat": 5.4141,
+      "lon": 100.3288,
+      "tags": {
+        "amenity": "restaurant",
+        "name": "Line Clear Nasi Kandar",
+        "cuisine": "indian",
+        "addr:housenumber": "163",
+        "addr:street": "Jalan Penang",
+        "addr:city": "George Town",
+        "addr:postcode": "10000",
+        "addr:country": "MY",
+        "opening_hours": "24/7"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2002,
+      "center": { "lat": 5.4148, "lon": 100.3295 },
+      "tags": {
+        "shop": "convenience",
+        "name": "99 Speedmart",
+        "brand": "99 Speedmart",
+        "brand:wikidata": "Q49262346",
+        "addr:city": "George Town"
+      }
+    },
+    {
+      "type": "node",
+      "id": 3003,
+      "lat": 5.4150,
+      "lon": 100.3300,
+      "tags": { "amenity": "bench" }
+    }
+  ]
+}

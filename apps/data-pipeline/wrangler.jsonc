@@ -1,0 +1,66 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "travel-data-pipeline",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Daily re-ingest of the seeded regions (scheduled handler in index.ts).
+  "triggers": { "crons": ["0 3 * * *"] },
+
+  "vars": { "DATA_VERSION": "1" },
+
+  // SoT lake + raw landing + r7 cold blobs all live in ONE bucket.
+  // `wrangler dev` must use remote:true so reads/writes hit real R2.
+  "r2_buckets": [
+    { "binding": "DATA", "bucket_name": "travel-data" /* remote: true under `wrangler dev` */ }
+  ],
+
+  // Program-owned group registry (write-side from v1). remote:true under dev.
+  "d1_databases": [
+    {
+      "binding": "GROUPS",
+      "database_name": "travel-groups",
+      "database_id": "REPLACE_WITH_D1_ID",
+      "migrations_dir": "migrations"
+      /* remote: true under `wrangler dev` */
+    }
+  ],
+
+  // Enrich pipeline: producer (workflow enqueues) + consumer (queue handler -> enrichBatch),
+  // with a dead-letter queue for NonRetryableError / exhausted retries.
+  "queues": {
+    "producers": [{ "binding": "ENRICH", "queue": "travel-enrich" }],
+    "consumers": [
+      {
+        "queue": "travel-enrich",
+        "max_batch_size": 25,
+        "max_batch_timeout": 10,
+        "max_retries": 5,
+        "dead_letter_queue": "travel-enrich-dlq"
+      },
+      // DLQ consumer: triage-only. Low throughput; messages land here after max_retries
+      // or a NonRetryableError thrown by enrichBatch. No dead_letter_queue (terminal).
+      {
+        "queue": "travel-enrich-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 1
+      }
+    ]
+  },
+
+  // Semantic front door. Index + 6 metadata indexes are created by the
+  // bootstrap step BEFORE any upsert. remote:true under dev (no local Vectorize).
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "travel-records" }],
+
+  "ai": { "binding": "AI" },
+
+  "workflows": [
+    {
+      "binding": "INGEST",
+      "name": "ingest-region",
+      "class_name": "IngestRegion"
+    }
+  ]
+}

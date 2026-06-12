@@ -14,6 +14,7 @@ export default defineWorkersConfig({
       workers: {
         miniflare: {
           d1Databases: ["GROUPS"],
+          r2Buckets: ["DATA"],
           compatibilityDate: "2025-05-01",
           compatibilityFlags: ["nodejs_compat"],
         },
