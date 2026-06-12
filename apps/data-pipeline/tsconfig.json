@@ -4,7 +4,7 @@
     "rootDir": ".",
     "outDir": "dist",
     "composite": true,
-    "types": ["@cloudflare/workers-types"]
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers"]
   },
   "references": [
     { "path": "../../packages/pipeline-core" },
