@@ -6,5 +6,5 @@
     "composite": true
   },
   "references": [{ "path": "../proto-ts" }],
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }
