@@ -132,4 +132,17 @@ describe('enrichBatch', () => {
       enrichBatch([{ record_uuid: 'rec-1', h3_r7: '872a1072bffffff', source: 'osm' }], env as any),
     ).rejects.toBeInstanceOf(NonRetryableError);
   });
+
+  it('throws a retryable error (not NonRetryableError) when AI returns wrong number of vectors', async () => {
+    const r = rec();
+    const { env } = makeEnv({ 'groups/r7/872a1072bffffff': blobBody([r]) });
+    // Override AI to return 0 vectors instead of 1 — simulates transient AI failure.
+    env.AI.run = vi.fn(async () => ({ data: [] }));
+    await expect(
+      enrichBatch([{ record_uuid: 'rec-1', h3_r7: '872a1072bffffff', source: 'osm' }], env as any),
+    ).rejects.toThrow();
+    await expect(
+      enrichBatch([{ record_uuid: 'rec-1', h3_r7: '872a1072bffffff', source: 'osm' }], env as any),
+    ).rejects.not.toBeInstanceOf(NonRetryableError);
+  });
 });

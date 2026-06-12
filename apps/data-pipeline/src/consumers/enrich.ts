@@ -63,16 +63,13 @@ export async function enrichBatch(msgs: EnrichMessage[], env: EnrichEnv): Promis
   }
   if (unique.size === 0) return;
 
-  const records: TravelRecord[] = [];
-  for (const m of unique.values()) {
-    records.push(await loadRecord(env, m));
-  }
+  const records = await Promise.all([...unique.values()].map((m) => loadRecord(env, m)));
 
   const texts = records.map(composeEmbedText);
   const embedding = (await env.AI.run(BGE_M3, { text: texts })) as { data: number[][] };
   const values = embedding?.data;
   if (!Array.isArray(values) || values.length !== records.length) {
-    throw new NonRetryableError(
+    throw new Error(
       `enrich: bge-m3 returned ${values?.length ?? 0} vectors for ${records.length} records`,
     );
   }
@@ -82,7 +79,7 @@ export async function enrichBatch(msgs: EnrichMessage[], env: EnrichEnv): Promis
     // is unreachable but noUncheckedIndexedAccess requires an explicit guard.
     const vec = values[i];
     if (vec === undefined) {
-      throw new NonRetryableError(`enrich: bge-m3 missing vector at index ${i}`);
+      throw new Error(`enrich: bge-m3 missing vector at index ${i}`);
     }
     return {
       id: rec.record_uuid,
