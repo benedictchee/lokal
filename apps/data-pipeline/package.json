@@ -1,0 +1,25 @@
+{
+  "name": "@travel/data-pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.2.3",
+    "@travel/pipeline-core": "workspace:*",
+    "@travel/proto-ts": "workspace:*",
+    "h3-js": "^4.4.0",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.5.40",
+    "@cloudflare/workers-types": "^4.20250121.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5",
+    "wrangler": "^3.107.0"
+  }
+}

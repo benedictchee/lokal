@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "types": ["@cloudflare/workers-types"]
+  },
+  "references": [
+    { "path": "../../packages/pipeline-core" },
+    { "path": "../../packages/proto-ts" }
+  ],
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
