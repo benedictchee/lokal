@@ -10,7 +10,7 @@
   "scripts": {
     "proto:gen": "buf generate",
     "build": "pnpm -r --filter \"./packages/**\" run build",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "tsc -b",
     "test": "pnpm -r run test"
   },
   "devDependencies": {
