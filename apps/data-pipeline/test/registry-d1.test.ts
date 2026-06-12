@@ -1,30 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { D1GroupRegistry } from '../src/registry-d1.js';
-
-// Migration SQL — keeps the split-on-semicolon logic identical to production.
-// We inline here because Miniflare's virtual FS doesn't map to the host filesystem.
-const MIGRATION_SQL = `
-CREATE TABLE IF NOT EXISTS groups (
-  group_uuid     TEXT PRIMARY KEY,
-  subject        TEXT NOT NULL,
-  kind           TEXT NOT NULL,
-  canonical_name TEXT NOT NULL,
-  created_at     INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS group_aliases (
-  alias_key  TEXT PRIMARY KEY,
-  group_uuid TEXT NOT NULL,
-  FOREIGN KEY (group_uuid) REFERENCES groups(group_uuid)
-);
-
-CREATE INDEX IF NOT EXISTS idx_group_aliases_group ON group_aliases(group_uuid)
-`;
+import migrationSql from '../migrations/0001_groups.sql?raw';
 
 // Apply the migration once per test against the isolated-per-test D1 (env.GROUPS).
 async function applyMigration() {
-  for (const stmt of MIGRATION_SQL.split(';').map((s) => s.trim()).filter(Boolean)) {
+  for (const stmt of migrationSql.split(';').map((s) => s.trim()).filter(Boolean)) {
     await env.GROUPS.prepare(stmt).run();
   }
 }

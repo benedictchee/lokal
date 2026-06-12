@@ -3,3 +3,8 @@ declare module 'cloudflare:test' {
     GROUPS: D1Database;
   }
 }
+
+declare module '*.sql?raw' {
+  const s: string;
+  export default s;
+}
