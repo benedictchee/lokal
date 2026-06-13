@@ -6,7 +6,7 @@ import type { Env } from '../src/env.js';
 
 async function loadNameIndex(env: Env): Promise<Map<string, { name: string; category: string }>> {
   const idx = new Map<string, { name: string; category: string }>();
-  const obj = await env.DATA.get('lake/poi/penang/v1.ndjson.gz');
+  const obj = await env.DATA.get('lake/poi/penang-island/v1.ndjson.gz');
   if (!obj) return idx;
   const text = await new Response((obj.body as ReadableStream).pipeThrough(new DecompressionStream('gzip'))).text();
   for (const line of text.trim().split('\n')) {
@@ -27,7 +27,7 @@ async function main() {
     // 1) embed the query with the SAME model used at ingest
     const t0 = Date.now();
     const emb = (await env.AI.run('@cf/baai/bge-m3', { text: [query] })) as { data: number[][] };
-    const vec = emb.data[0];
+    const vec = emb.data[0]!;
     console.log(`embedded -> ${vec.length}-dim vector (e.g. [${vec.slice(0, 4).map((x) => x.toFixed(4)).join(', ')}, ...])`);
 
     // 2) query the cloud Vectorize index
