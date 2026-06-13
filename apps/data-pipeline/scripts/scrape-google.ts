@@ -21,12 +21,23 @@ import type { GoogleRawPlace, GoogleRawOutput } from '@travel/pipeline-core';
 // CONFIG
 // ---------------------------------------------------------------------------
 
-const QUERY = 'restaurants in George Town Penang';
-const MAX_PLACES = 10; // cap for the MVP
-const MAX_REVIEWS_PER_PLACE = 5;
-const SCROLL_ITER_CAP = 10; // max scroll iterations per container
-const MIN_DELAY_MS = 1500;
-const MAX_DELAY_MS = 4000;
+// Multi-query sweep across Penang island — category × locality, deduped by
+// place_id so a place found in two searches is scraped once.
+const QUERIES = [
+  'restaurants in George Town Penang',
+  'cafes in George Town Penang',
+  'hawker food in Penang island',
+  'tourist attractions in Penang island',
+  'temples in Penang island',
+  'beaches in Penang island',
+  'hotels in Batu Ferringhi Penang',
+  'things to do in Air Itam Penang',
+];
+const MAX_PLACES_PER_QUERY = 12;
+const MAX_REVIEWS_PER_PLACE = 8;
+const SCROLL_ITER_CAP = 12; // max scroll iterations per container
+const MIN_DELAY_MS = 1200;
+const MAX_DELAY_MS = 3200;
 
 // Output
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -275,9 +286,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`\nM4 Google Maps scraper — George Town, Penang`);
-  console.log(`Query: "${QUERY}"`);
-  console.log(`Max places: ${MAX_PLACES}, max reviews/place: ${MAX_REVIEWS_PER_PLACE}\n`);
+  console.log(`\nM4 Google Maps scraper — Penang island (multi-query sweep)`);
+  console.log(`Queries: ${QUERIES.length}, max ${MAX_PLACES_PER_QUERY}/query, max reviews/place: ${MAX_REVIEWS_PER_PLACE}\n`);
 
   // Prefer system Chrome; fall back to bundled chromium
   const useSysChrome = existsSync('/Applications/Google Chrome.app');
@@ -307,112 +317,113 @@ async function main(): Promise<void> {
 
   const scraped_at = new Date().toISOString();
   const places: GoogleRawPlace[] = [];
+  const seen = new Set<string>(); // dedup across queries by place_id / ftid / href
 
   try {
-    // 1. Load the search feed
-    const searchUrl =
-      'https://www.google.com/maps/search/' +
-      encodeURIComponent(QUERY) +
-      '/?hl=en';
-    console.log(`Navigating to search feed: ${searchUrl}`);
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    for (let qi = 0; qi < QUERIES.length; qi++) {
+      const query = QUERIES[qi]!;
+      console.log(`\n=== [query ${qi + 1}/${QUERIES.length}] "${query}" ===`);
 
-    // Fallback: handle consent page
-    await randomDelay(1500, 2500);
-    const consentBtn = page.locator('button[aria-label*="Accept all"]');
-    if ((await consentBtn.count()) > 0) {
-      console.log('  [consent] Clicking "Accept all" consent button...');
-      await consentBtn.first().click();
+      // 1. Load the search feed
+      const searchUrl =
+        'https://www.google.com/maps/search/' + encodeURIComponent(query) + '/?hl=en';
+      console.log(`Navigating to search feed: ${searchUrl}`);
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+      // Fallback: handle consent page (usually a no-op after the first query)
       await randomDelay(1500, 2500);
-    } else {
-      // Try generic consent form button
-      const consentForm = page.locator('form[action*="consent"] button').last();
-      if ((await consentForm.count()) > 0) {
-        console.log('  [consent] Clicking consent form button...');
-        await consentForm.click();
+      const consentBtn = page.locator('button[aria-label*="Accept all"]');
+      if ((await consentBtn.count()) > 0) {
+        console.log('  [consent] Clicking "Accept all" consent button...');
+        await consentBtn.first().click();
         await randomDelay(1500, 2500);
-      }
-    }
-
-    // 2. Wait for feed
-    const feedLocator = page.locator(SEL.feed);
-    await feedLocator.waitFor({ timeout: 15000 }).catch(() => {
-      console.log(`  [warn] Feed selector "${SEL.feed}" not found within timeout`);
-    });
-
-    const feedCount = await feedLocator.count();
-    if (feedCount === 0) {
-      console.log(`  [warn] No feed container found — logging page HTML for debugging`);
-      const html = await page.content();
-      console.log(html.substring(0, 2000));
-    }
-
-    // 3. Scroll feed to collect card hrefs
-    await scrollUntil(page, SEL.feed, MAX_PLACES, SCROLL_ITER_CAP, SEL.card);
-
-    const cardLinks = page.locator(SEL.cardLink);
-    const cardCount = await cardLinks.count();
-    console.log(`\nFound ${cardCount} place cards in feed`);
-
-    if (cardCount === 0) {
-      console.log(`  [warn] Selector "${SEL.cardLink}" found 0 cards — logging feed HTML`);
-      const feedHtml = await feedLocator.first().innerHTML().catch(() => '');
-      console.log(feedHtml.substring(0, 3000));
-    }
-
-    // Collect hrefs up front (avoid stale references after navigation)
-    const hrefs: string[] = [];
-    const limit = Math.min(cardCount, MAX_PLACES);
-    for (let i = 0; i < limit; i++) {
-      const href = await cardLinks.nth(i).getAttribute('href');
-      if (href) hrefs.push(href);
-    }
-    console.log(`Collected ${hrefs.length} place hrefs\n`);
-
-    // 4. Per-place scraping (sequential with delays)
-    let hrefIdx = 0;
-    for (const href of hrefs) {
-      hrefIdx++;
-      const placeId = parsePlaceIdFromHref(href);
-      const ftid = parseFtidFromHref(href);
-      const coords = parseCoordsFromHref(href);
-
-      console.log(`[${hrefIdx}/${hrefs.length}] Scraping place_id=${placeId || '(unknown)'}`);
-
-      await randomDelay(MIN_DELAY_MS, MAX_DELAY_MS);
-
-      let panel: GoogleRawPlace['panel'];
-      let reviews: GoogleRawPlace['reviews'];
-
-      try {
-        const result = await scrapeReviews(page, href);
-        panel = {
-          name: result.name,
-          category: result.category,
-          rating: result.rating,
-          review_count: result.review_count,
-        };
-        reviews = result.reviews;
-        console.log(
-          `  name="${result.name}" category="${result.category}" ` +
-            `rating=${result.rating} reviews=${reviews.length}`,
-        );
-      } catch (err) {
-        console.error(`  [error] Failed to scrape place:`, err);
-        panel = { name: '', category: '', rating: null, review_count: null };
-        reviews = [];
+      } else {
+        const consentForm = page.locator('form[action*="consent"] button').last();
+        if ((await consentForm.count()) > 0) {
+          console.log('  [consent] Clicking consent form button...');
+          await consentForm.click();
+          await randomDelay(1500, 2500);
+        }
       }
 
-      places.push({
-        place_id: placeId,
-        ftid,
-        place_href: href,
-        panel,
-        reviews,
-        scraped_at,
-        lat: coords?.lat,
-        lng: coords?.lng,
+      // 2. Wait for feed
+      const feedLocator = page.locator(SEL.feed);
+      await feedLocator.waitFor({ timeout: 15000 }).catch(() => {
+        console.log(`  [warn] Feed selector "${SEL.feed}" not found within timeout`);
       });
+
+      // 3. Scroll feed to collect card hrefs
+      await scrollUntil(page, SEL.feed, MAX_PLACES_PER_QUERY, SCROLL_ITER_CAP, SEL.card);
+
+      const cardLinks = page.locator(SEL.cardLink);
+      const cardCount = await cardLinks.count();
+      console.log(`Found ${cardCount} place cards in feed`);
+
+      if (cardCount === 0) {
+        console.log(`  [warn] Selector "${SEL.cardLink}" found 0 cards for this query — skipping`);
+        continue;
+      }
+
+      // Collect hrefs up front (avoid stale references after navigation)
+      const hrefs: string[] = [];
+      const limit = Math.min(cardCount, MAX_PLACES_PER_QUERY);
+      for (let i = 0; i < limit; i++) {
+        const href = await cardLinks.nth(i).getAttribute('href');
+        if (href) hrefs.push(href);
+      }
+      console.log(`Collected ${hrefs.length} place hrefs for this query\n`);
+
+      // 4. Per-place scraping (sequential with delays), skipping cross-query dups
+      let hrefIdx = 0;
+      for (const href of hrefs) {
+        hrefIdx++;
+        const placeId = parsePlaceIdFromHref(href);
+        const ftid = parseFtidFromHref(href);
+        const coords = parseCoordsFromHref(href);
+        const dedupKey = placeId || ftid || href;
+        if (seen.has(dedupKey)) {
+          console.log(`[${hrefIdx}/${hrefs.length}] skip dup place_id=${placeId || '(unknown)'}`);
+          continue;
+        }
+        seen.add(dedupKey);
+
+        console.log(`[${hrefIdx}/${hrefs.length}] Scraping place_id=${placeId || '(unknown)'}`);
+
+        await randomDelay(MIN_DELAY_MS, MAX_DELAY_MS);
+
+        let panel: GoogleRawPlace['panel'];
+        let reviews: GoogleRawPlace['reviews'];
+
+        try {
+          const result = await scrapeReviews(page, href);
+          panel = {
+            name: result.name,
+            category: result.category,
+            rating: result.rating,
+            review_count: result.review_count,
+          };
+          reviews = result.reviews;
+          console.log(
+            `  name="${result.name}" category="${result.category}" ` +
+              `rating=${result.rating} reviews=${reviews.length}`,
+          );
+        } catch (err) {
+          console.error(`  [error] Failed to scrape place:`, err);
+          panel = { name: '', category: '', rating: null, review_count: null };
+          reviews = [];
+        }
+
+        places.push({
+          place_id: placeId,
+          ftid,
+          place_href: href,
+          panel,
+          reviews,
+          scraped_at,
+          lat: coords?.lat,
+          lng: coords?.lng,
+        });
+      }
     }
   } finally {
     await browser.close();
@@ -422,7 +433,7 @@ async function main(): Promise<void> {
   mkdirSync(OUT_DIR, { recursive: true });
   const output: GoogleRawOutput = {
     source: 'google',
-    query: QUERY,
+    query: QUERIES.join(' | '),
     fetched_via: 'playwright-chrome',
     scraped_at,
     places,
