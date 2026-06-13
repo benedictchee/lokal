@@ -6,6 +6,9 @@
   "compatibility_date": "2025-05-01",
   "compatibility_flags": ["nodejs_compat"],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "travel-data" }],
+  "d1_databases": [
+    { "binding": "GROUPS", "database_name": "travel-groups", "database_id": "1b9cbcb6-4a04-44a1-9f56-2fb458b1fa89", "migrations_dir": "migrations" }
+  ],
   "vectorize": [{ "binding": "VECTORIZE", "index_name": "travel-records" }],
   "ai": { "binding": "AI" }
 }
