@@ -45,9 +45,9 @@ describe('buildExtractionMessages', () => {
       reviews: [{ stars: 5, text: 'amazing pork belly' }],
     });
     expect(msgs).toHaveLength(2);
-    expect(msgs[0].role).toBe('system');
-    expect(msgs[1].content).toContain('amazing pork belly');
-    expect(msgs[0].content.toLowerCase()).toContain('json');
+    expect(msgs[0]!.role).toBe('system');
+    expect(msgs[1]!.content).toContain('amazing pork belly');
+    expect(msgs[0]!.content.toLowerCase()).toContain('json');
   });
 });
 
