@@ -83,8 +83,9 @@ function cleanList(v: unknown): string[] {
     .slice(0, MAX_ITEMS_PER_FACET);
 }
 
-/** Parse a model response into CriticalInfo. Tolerates code fences/surrounding prose. Null if no JSON object. */
-export function parseCriticalInfo(raw: string): CriticalInfo | null {
+/** Parse a model response into CriticalInfo. Tolerates non-string input, code fences/surrounding prose. Null if no JSON object. */
+export function parseCriticalInfo(raw: unknown): CriticalInfo | null {
+  if (typeof raw !== 'string') return null;
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
   if (start === -1 || end === -1 || end < start) return null;

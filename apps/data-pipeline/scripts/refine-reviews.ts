@@ -30,6 +30,7 @@ async function main() {
     let processed = 0, embedded = 0, skipped = 0;
 
     for (const place of places) {
+     try {
       const reviews = place.reviews ?? [];
       if (reviews.length === 0) { skipped++; continue; }
 
@@ -78,6 +79,11 @@ async function main() {
       });
       processed++;
       console.log(`  ✓ ${record.name}: +${newReviews.length} new reviews -> ${Object.values(ci).flat().length} facts`);
+     } catch (err) {
+       // Per-place isolation: one place's transient failure must not abort the whole run.
+       skipped++;
+       console.log(`  [error] ${place.place_id}: ${(err as Error)?.message ?? String(err)}`);
+     }
     }
     console.log(`\nprocessed=${processed} embedded=${embedded} skipped=${skipped} / ${places.length} places (LIMIT=${LIMIT})`);
   } finally {

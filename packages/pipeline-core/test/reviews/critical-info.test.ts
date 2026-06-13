@@ -72,4 +72,9 @@ describe('parseCriticalInfo', () => {
   it('returns null on non-JSON', () => {
     expect(parseCriticalInfo('the model refused to answer')).toBeNull();
   });
+  it('returns null on non-string input (defensive)', () => {
+    expect(parseCriticalInfo(undefined)).toBeNull();
+    expect(parseCriticalInfo(42)).toBeNull();
+    expect(parseCriticalInfo({ specialties: ['x'] })).toBeNull();
+  });
 });
