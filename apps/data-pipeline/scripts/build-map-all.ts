@@ -17,7 +17,7 @@ async function readLake(env: Env, key: string): Promise<Record<string, unknown>[
 async function main(): Promise<void> {
   const { env, dispose } = await getPlatformProxy<Env>({ configPath: 'wrangler.cli.jsonc' });
   try {
-    const poiRecs = await readLake(env, 'lake/poi/penang/v1.ndjson.gz');
+    const poiRecs = await readLake(env, 'lake/poi/penang-island/v1.ndjson.gz');
     const busRecs = await readLake(env, 'lake/transport/penang-bus/v1.ndjson.gz');
     const gj = JSON.parse(readFileSync(join(import.meta.dirname, 'out/google-georgetown.json'), 'utf8'));
 
