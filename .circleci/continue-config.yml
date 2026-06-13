@@ -1,0 +1,137 @@
+# Continuation pipeline — only the workflows whose `when:` guard is true run.
+# Parameters are set by the path-filtering orb in .circleci/config.yml.
+#
+# Job bodies are the baseline; fill in real steps as each subsystem lands.
+# See CICD.md for the strategy and the proto/packages fan-out rule.
+version: 2.1
+
+parameters:
+  proto_changed:         { type: boolean, default: false }
+  packages_changed:      { type: boolean, default: false }
+  consumer_api_changed:  { type: boolean, default: false }
+  merchant_api_changed:  { type: boolean, default: false }
+  data_pipeline_changed: { type: boolean, default: false }
+  merchant_web_changed:  { type: boolean, default: false }
+  consumer_app_changed:  { type: boolean, default: false }
+
+orbs:
+  node: circleci/node@5
+  flutter: circleci/flutter@2
+
+executors:
+  buf:
+    docker:
+      - image: bufbuild/buf:latest
+  node:
+    docker:
+      - image: cimg/node:lts        # pin to the project's Node version
+  android:
+    docker:
+      - image: cimg/android:2024.01.1
+  ios:
+    macos:
+      xcode: "15.3.0"
+
+# ---- Reusable jobs -----------------------------------------------------------
+
+jobs:
+  proto-check:
+    executor: buf
+    steps:
+      - checkout
+      - run: { name: Lint, command: buf lint }
+      - run: { name: Breaking-change check, command: "buf breaking --against '.git#branch=main'" }
+      - run: { name: Codegen drift, command: "buf generate && git diff --exit-code" }
+
+  # Parameterized job for the three Cloudflare Workers.
+  worker:
+    parameters:
+      app: { type: string }
+    executor: node
+    steps:
+      - checkout
+      - node/install-packages: { pkg-manager: pnpm }
+      - run: { name: Typecheck + lint, command: "pnpm --filter <<parameters.app>> lint" }
+      - run: { name: Test, command: "pnpm --filter <<parameters.app>> test" }
+      - when:
+          condition:
+            equal: [main, << pipeline.git.branch >>]
+          steps:
+            - run:
+                name: Deploy
+                command: "pnpm --filter <<parameters.app>> exec wrangler deploy"
+                # CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID come from the `cloudflare` context
+
+  merchant-web:
+    executor: node
+    steps:
+      - checkout
+      - node/install-packages: { pkg-manager: pnpm }
+      - run: { name: Lint + test, command: "pnpm --filter merchant-web lint && pnpm --filter merchant-web test" }
+      - run: { name: Static export, command: "pnpm --filter merchant-web build" }
+      - when:
+          condition:
+            equal: [main, << pipeline.git.branch >>]
+          steps:
+            - run: { name: Deploy to R2, command: "pnpm --filter merchant-web exec wrangler deploy" }
+
+  consumer-app:
+    executor: android
+    steps:
+      - checkout
+      - flutter/install_sdk_and_pub: { version: stable }
+      - run: { name: Analyze, command: "flutter analyze" }
+      - run: { name: Test, command: "flutter test" }
+      # Shorebird release runs on tags via the `shorebird` + `mobile-signing` contexts.
+
+# ---- Guarded workflows -------------------------------------------------------
+# Each TS app fans in proto_changed OR packages_changed OR its own flag.
+
+workflows:
+  proto:
+    when: << pipeline.parameters.proto_changed >>
+    jobs: [proto-check]
+
+  consumer-api:
+    when:
+      or:
+        - << pipeline.parameters.proto_changed >>
+        - << pipeline.parameters.packages_changed >>
+        - << pipeline.parameters.consumer_api_changed >>
+    jobs:
+      - worker: { app: consumer-api, context: [cloudflare] }
+
+  merchant-api:
+    when:
+      or:
+        - << pipeline.parameters.proto_changed >>
+        - << pipeline.parameters.packages_changed >>
+        - << pipeline.parameters.merchant_api_changed >>
+    jobs:
+      - worker: { app: merchant-api, context: [cloudflare] }
+
+  data-pipeline:
+    when:
+      or:
+        - << pipeline.parameters.proto_changed >>
+        - << pipeline.parameters.packages_changed >>
+        - << pipeline.parameters.data_pipeline_changed >>
+    jobs:
+      - worker: { app: data-pipeline, context: [cloudflare] }
+
+  merchant-web:
+    when:
+      or:
+        - << pipeline.parameters.proto_changed >>
+        - << pipeline.parameters.packages_changed >>
+        - << pipeline.parameters.merchant_web_changed >>
+    jobs:
+      - merchant-web: { context: [cloudflare] }
+
+  consumer-app:
+    when:
+      or:
+        - << pipeline.parameters.proto_changed >>
+        - << pipeline.parameters.consumer_app_changed >>
+    jobs:
+      - consumer-app

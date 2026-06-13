@@ -1,0 +1,30 @@
+# Setup pipeline — does no work itself.
+# It maps changed paths to pipeline parameters, then continues to
+# .circleci/continue-config.yml where the real (guarded) workflows live.
+#
+# See CICD.md for the full strategy.
+version: 2.1
+setup: true
+
+orbs:
+  # Pinned to major; resolves to the latest 1.x at run time.
+  path-filtering: circleci/path-filtering@1
+
+workflows:
+  setup:
+    jobs:
+      - path-filtering/filter:
+          name: detect-changes
+          base-revision: main
+          config-path: .circleci/continue-config.yml
+          # "<path regex> <parameter name> <value>"
+          # proto/ and packages/ are upstream of the TS apps; their guards
+          # OR these flags in (see continue-config.yml).
+          mapping: |
+            proto/.*                  proto_changed          true
+            packages/.*               packages_changed       true
+            apps/consumer-api/.*      consumer_api_changed   true
+            apps/merchant-api/.*      merchant_api_changed   true
+            apps/data-pipeline/.*     data_pipeline_changed  true
+            apps/merchant-web/.*      merchant_web_changed   true
+            apps/consumer-app/.*      consumer_app_changed   true

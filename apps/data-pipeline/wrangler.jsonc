@@ -6,7 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
 
   // Daily re-ingest of the seeded regions (scheduled handler in index.ts).
-  "triggers": { "crons": ["0 3 * * *"] },
+  // Disabled during initial testing to avoid surprise daily ingests; re-add "0 3 * * *" for production.
+  "triggers": { "crons": [] },
 
   "vars": { "DATA_VERSION": "1" },
 
@@ -25,7 +26,7 @@
     {
       "binding": "GROUPS",
       "database_name": "travel-groups",
-      "database_id": "REPLACE_WITH_D1_ID",
+      "database_id": "1b9cbcb6-4a04-44a1-9f56-2fb458b1fa89",
       "migrations_dir": "migrations"
       /* remote: true under `wrangler dev` */
     }

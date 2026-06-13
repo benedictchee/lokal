@@ -6,3 +6,9 @@ coverage/
 .DS_Store
 # Scraped Google Maps output — raw data, do not commit
 apps/data-pipeline/scripts/out/
+# Generated visualizations + screenshots + browser session (regenerable, throwaway)
+apps/data-pipeline/viz/
+.playwright-mcp/
+*.jpeg
+# Early throwaway spike
+spike/

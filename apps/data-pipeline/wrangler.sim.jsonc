@@ -1,0 +1,11 @@
+{
+  // Minimal config for the search SIMULATION script (getPlatformProxy):
+  // AI + Vectorize hit the REAL cloud; DATA (R2) is the local lake for name resolution.
+  "name": "travel-sim",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "r2_buckets": [{ "binding": "DATA", "bucket_name": "travel-data" }],
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "travel-records" }],
+  "ai": { "binding": "AI" }
+}
