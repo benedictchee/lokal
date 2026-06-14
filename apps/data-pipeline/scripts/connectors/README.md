@@ -88,6 +88,20 @@ Every `PullResult` is stamped with a `classification` (and `path`, `apiStatus`, 
 See [FINDINGS.md](FINDINGS.md) for the per-source results (97 sources: open 11 · api-key 26 ·
 api-license 32 · browser 26 · no-public-source 2 → **95/97 obtainable**).
 
+### Browser-scraping coverage (assume no keys → everything routes to Chrome)
+
+| Bucket | Count | Meaning |
+|--------|------:|---------|
+| ✅ available via browser/open | 45 | open data + real records scraped, one page each |
+| 🔴 WAF-blocked | 23 | DataDome/Cloudflare/Access-Denied/CAPTCHA from a datacenter IP → need an alternative source or `BROWSER_PROXY` |
+| ⚠️ data-provider, no public site | 13 | no consumer site to scrape — get via their API/feed (mostly overlap our open sources) |
+| ⚠️ SPA / heavy anti-bot, no scrapable HTML | 14 | canvas/XHR super-apps (CN/KR) — need internal-JSON-XHR or a regional proxy |
+| ⛔ no public source | 2 | `factual` (→ Foursquare OS Places), `douyin-life` (app-only) |
+
+**The only genuinely unreachable source is `douyin-life`** (app-only). WAF + SPA sites are reachable
+with a residential `BROWSER_PROXY`; data-provider APIs are reachable via their feed. Full per-source
+lists in [FINDINGS.md](FINDINGS.md#browser-scraping-coverage--whats-available-whats-not).
+
 ## Running
 
 ```bash
