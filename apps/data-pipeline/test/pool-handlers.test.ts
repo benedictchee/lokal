@@ -136,6 +136,25 @@ describe('POST /pool/results', () => {
     const res = await routePool(resultsReq(AUTH, body), new URL('http://localhost/pool/results'), env as PoolEnv);
     expect(res?.status).toBe(404);
   });
+
+  it('413s when the base64 payload exceeds the size cap', async () => {
+    // The size guard runs before lease lookup, so no lease is needed.
+    const huge = 'A'.repeat(12_000_001);
+    const body = { leaseId: 'whatever', status: 200, challenge: null, gzippedDomBase64: huge, timings: {} };
+    const res = await routePool(resultsReq(AUTH, body), new URL('http://localhost/pool/results'), env as PoolEnv);
+    expect(res?.status).toBe(413);
+  });
+
+  it('400s when the payload is not valid gzip', async () => {
+    const reg = new PoolUrlRegistryStore(env.GROUPS);
+    await reg.upsert({ url: 'https://res.com/3', host: 'res.com', waitForSelector: null, dwellMs: null });
+    const ls = new PoolLeaseStore(env.GROUPS);
+    const now = new Date().toISOString();
+    await ls.create([{ lease_id: 'RES-L3', url: 'https://res.com/3', host: 'res.com', device_id: 'dev-h' }], now, addIso(now, 300));
+    const body = { leaseId: 'RES-L3', status: 200, challenge: null, gzippedDomBase64: btoa('not gzip'), timings: {} };
+    const res = await routePool(resultsReq(AUTH, body), new URL('http://localhost/pool/results'), env as PoolEnv);
+    expect(res?.status).toBe(400);
+  });
 });
 
 describe('POST /pool/heartbeat', () => {

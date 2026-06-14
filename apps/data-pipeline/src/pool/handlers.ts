@@ -77,6 +77,9 @@ export async function handleResults(request: Request, env: PoolEnv): Promise<Res
   if (typeof body.leaseId !== 'string' || typeof body.gzippedDomBase64 !== 'string') {
     return new Response('bad request: leaseId and gzippedDomBase64 required', { status: 400 });
   }
+  if (body.gzippedDomBase64.length > POOL.MAX_RESULT_B64_LEN) {
+    return new Response('payload too large', { status: 413 });
+  }
 
   const nowIso = new Date().toISOString();
   const leases = new PoolLeaseStore(env.GROUPS);
@@ -102,14 +105,24 @@ export async function handleResults(request: Request, env: PoolEnv): Promise<Res
     return json({ ok: true, challenge: body.challenge });
   }
 
-  const bytes = base64ToBytes(body.gzippedDomBase64);
-  const dom = await gunzipToString(bytes);
+  let bytes: Uint8Array;
+  let dom: string;
+  try {
+    bytes = base64ToBytes(body.gzippedDomBase64);
+    dom = await gunzipToString(bytes, POOL.MAX_DOM_BYTES);
+  } catch (e) {
+    const tooBig = e instanceof Error && e.message.includes('exceeds cap');
+    return new Response(tooBig ? 'payload too large' : 'bad request: invalid gzip payload', { status: tooBig ? 413 : 400 });
+  }
   const contentHash = fnv1a(dom);
-  const key = `pool/${(await sha256Hex(lease.url)).slice(0, 16)}/${Date.parse(nowIso)}.html.gz`;
+  const key = `pool/${(await sha256Hex(lease.url)).slice(0, 16)}/${Date.parse(nowIso)}-${body.leaseId}.html.gz`;
   await env.DATA.put(key, bytes, {
     httpMetadata: { contentType: 'text/html; charset=utf-8', contentEncoding: 'gzip' },
     customMetadata: { url: lease.url, deviceId, leaseId: body.leaseId, contentHash, fetchedAt: nowIso },
   });
+  // NOTE: downstream extraction is not wired yet — the raw DOM is parked in R2 and the
+  // registry marked fetched. Wiring the extractor hop (DOM → PulledRecord → pipeline) is a
+  // tracked follow-up; see src/pool/README.md "Known follow-ups".
   await reg.markFetched(lease.url, contentHash, nowIso, addSeconds(nowIso, POOL.REFRESH_INTERVAL_SEC));
   await leases.markDone(body.leaseId);
   return json({ ok: true, contentHash, stored: key });

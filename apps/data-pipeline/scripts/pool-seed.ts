@@ -25,7 +25,7 @@ if (!deviceId || !rawToken || urls.length === 0) {
 const now = new Date().toISOString();
 const lines: string[] = [];
 lines.push(
-  `INSERT OR REPLACE INTO pool_device (device_id, token_sha256, enabled, created_at) VALUES ('${deviceId}', '${sha256Hex(rawToken)}', 1, '${now}');`,
+  `INSERT OR REPLACE INTO pool_device (device_id, token_sha256, enabled, created_at) VALUES ('${deviceId.replace(/'/g, "''")}', '${sha256Hex(rawToken)}', 1, '${now}');`,
 );
 for (const u of urls) {
   lines.push(

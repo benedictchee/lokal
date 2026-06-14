@@ -35,3 +35,10 @@ See `src/pool/config.ts` (`POOL.*`): lease TTL, max URLs/lease, backoff base/cap
 The Android pool app and MDM rollout are separate subsystems/plans. Target-URL governance
 must respect the catalog tiers (`docs/research/travel-data-sources-catalog.md`): permitted,
 IP-reputation-gated sources only — never red-tier.
+
+## Known follow-ups (not yet implemented)
+
+- **Extractor hop:** `/pool/results` stores the rendered DOM in R2 and marks the URL
+  fetched, but does not yet enqueue it for server-side extraction into a `PulledRecord`.
+  The existing `ENRICH` queue can't carry raw DOM as-is, so this needs its own extraction
+  step. Wire it when the Android app starts delivering real DOM.
