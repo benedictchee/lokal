@@ -58,6 +58,20 @@ no data — `google-places` (API needs_key) → 5 records via google-maps; `hot-
 (needs_key) → 5; `tabelog` (API blocked) → 5; while `klook` (needs_license) and
 `tripadvisor-content` (needs_key) reach Chrome but hit DataDome → reclassified `browser+proxy`.
 
+### "Reached but 0 items" drill-down
+
+A DOM diagnostic (`_gen/diagnose-zero.ts`) over the ~21 sources that loaded but extracted nothing
+found that **only one was a true selector bug** — **booking-com** (its search bounced to the
+homepage, so the property-card grid never rendered; fixed with a resilient `/hotel/<cc>/<slug>.html`
+extractor → now 5 real hotels). The rest were **anti-bot walls the detector initially missed**:
+Access-Denied 403s (zomato, opentable, culture-trip, siksin, reddit), CAPTCHA iframes
+(mafengwo, tongcheng, yandex-eda), HTTP 432 (ctrip), login/captcha/onboarding redirects
+(foursquare→login, meituan→/win-together, 2gis→/museum), and empty SPA shells (amap, catchtable).
+`looksLikeChallenge` was hardened (Access-Denied / CAPTCHA / 432 / 503 / login-redirect / tiny-shell
+detection), so these now correctly report **`browser+proxy`** (need a residential `BROWSER_PROXY`)
+instead of a misleading `partial / 0 items`. A handful of canvas/XHR SPAs (naver, qunar, swiggy,
+trip-com, tongcheng) render content with no scrapable anchors and remain drill-down candidates.
+
 ### Two answers, distilled
 
 - **Doable now (zero cost):** the open tier — Wikidata, Wikipedia, Wikivoyage, DBpedia,
