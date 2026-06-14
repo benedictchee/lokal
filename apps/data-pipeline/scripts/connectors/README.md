@@ -1,0 +1,105 @@
+# Prototype scraper framework
+
+Exploratory harness to answer, for every source in
+[`docs/research/travel-data-sources-catalog.md`](../../../../docs/research/travel-data-sources-catalog.md),
+two questions with a **runnable experiment**:
+
+1. **Is pulling data doable?** (real fetch / probe — if it fails, drill down separately)
+2. **Can we cheaply produce a delta?** — a per-source **fingerprint** + incremental-pull
+   method so we only ingest new/updated info since a prior snapshot, avoiding full re-pulls.
+
+> Prototype status: not production. The trigger input is deliberately loose (every field
+> optional). Production will **require** `sinceTimestamp` (the `last_snapshot_timestamp` contract).
+> Dedup of records is handled **separately** downstream — connectors only emit the
+> `content_hash` (per record) and `sourceFingerprint` (per snapshot) needed to dedup.
+
+## One interface in, one envelope out
+
+Every source implements `SourceConnector` ([core/types.ts](core/types.ts)):
+
+```ts
+connector.pull(input: PullInput, deps: ConnectorDeps): Promise<PullResult>
+```
+
+- **Trigger** (`PullInput`): `{ sinceTimestamp?, lastSnapshotFingerprint?, cursor?, limit?, region? }`
+- **Output** (`PullResult`): uniform envelope with `status`, `sourceFingerprint`, `incremental`
+  (the chosen delta method), `records` (each carrying `record_uuid` + `content_hash`), `cursor`,
+  `unchangedSinceSnapshot`, and `notes`.
+
+Connectors are built with `defineConnector(...)` ([core/connector.ts](core/connector.ts)), which
+stamps timing, guarantees the run never throws, counts records, and short-circuits when the
+`sourceFingerprint` matches `lastSnapshotFingerprint`.
+
+It reuses the repo's pipeline-core primitives: `fnv1a` (the `content_hash`), `recordUuid` (stable
+ids), and `TravelRecord` — so a promising connector graduates into the real pipeline unchanged.
+
+## Source fingerprint = "did anything change since last snapshot?"
+
+Each connector computes a `sourceFingerprint` via `sourceFp(method, components)`. The **method is
+customised per source**, picking the cheapest signal that flips when the source changes:
+
+| Method | Used when | Example sources |
+|--------|-----------|-----------------|
+| `release-date` / `release-tag` | bulk dataset with dated releases | Foursquare OS Places, Overture |
+| `replication-sequence` | OSM-style replication state | OSM Planet/Geofabrik |
+| `max-dateModified+count` | per-entity modified timestamp | Wikidata |
+| `latest-timestamp+revid` | changes feed | Wikipedia, Wikivoyage |
+| `rowsUpdatedAt+count` | dataset-level update time | Socrata (US open data) |
+| `latest-diff-date+rows` | published daily diff files | GeoNames |
+| `etag` / `last-modified` | HTTP headers (universal fallback) | any URL |
+| `sitemap-lastmod-max` | no API; sitemap has `<lastmod>` | Tabelog, Wongnai, HappyCow… |
+| `content-hash` | no timestamp anywhere (last resort) | anti-bot / closed sources |
+
+## Incremental-pull methods (best → worst)
+
+`api-since-param` › `changes-feed` › `dump-diff` › `sort-by-updated` / `sitemap-lastmod` ›
+`etag-conditional` › `full-only` › `none`. Each connector declares the best realistic method for
+its source in `plan.incremental` and applies it (using `input.sinceTimestamp`) when possible.
+
+## Running
+
+```bash
+cd apps/data-pipeline
+
+# list everything
+npx tsx scripts/connectors/run.ts --list
+
+# one connector, verbose
+npx tsx scripts/connectors/run.ts wikidata --limit=10 --verbose
+
+# a whole tier
+npx tsx scripts/connectors/run.ts tierA --since=2026-05-01T00:00:00Z --concurrency=6
+
+# everything (writes out/<id>.json + out/_summary.json, prints the matrix)
+npx tsx scripts/connectors/run.ts all --concurrency=8
+
+# enable the Chrome scrape path for no-API sources (uses system Chrome)
+PROBE_BROWSER=1 npx tsx scripts/connectors/run.ts atlas-obscura --verbose
+```
+
+API keys are read from `process.env` (e.g. `GOOGLE_MAPS_API_KEY`, `YELP_API_KEY`,
+`OPENTRIPMAP_KEY`, `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`, `REDDIT_CLIENT_ID`, …). Without a key,
+a keyed source returns `needs_key` after a real probe that confirms the gate.
+
+## Status legend
+
+`🟢 ok` real data pulled · `🟡 partial` some data / caveats · `🔑 needs_key` API needs a credential ·
+`📄 needs_license` paid/partner license required · `🔴 blocked` no sanctioned access (anti-bot / closed) ·
+`💥 error` unexpected failure.
+
+> **Legality note:** tiers come from the source catalog. This prototype assumes licences are in
+> hand (per the task brief). `blocked`/`needs_license` reflect *technical/ToS* access, not a
+> decision to bypass it — production must respect each source's terms.
+
+## Layout
+
+```
+core/        types, connector wrapper, fingerprint+probe helpers, web/duck/browser helpers, runner, registry
+tierA/       open/bulk-ingestible (live experiments: Wikidata, OSM, GeoNames, Foursquare, Overture, …)
+tierB/       licensable-commercial
+tierC/       API display/lookup-only
+tierD/       partner/affiliate-gated
+tierE/       scrape-only / no sanctioned access
+out/         per-connector PullResult JSON + _summary.json (gitignored)
+_gen/        the workflow script that generated the B–E connectors
+```
