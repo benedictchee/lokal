@@ -175,7 +175,83 @@ incremental time-delta runs; cloud D1 serving tier; cron-driven refresh.
   matches on review-derived language (e.g. "smoky wok-fried flavour", "cash only
   old-school spot") surfaces the right place — proving critical info is in the index.
 
-## 12. Out of scope
+## 12. Vectorize usage, retention & cost (verified 2026-06-14)
+
+Capabilities checked against Cloudflare docs on 2026-06-14; they shape how the
+derived artifact lives in Vectorize and how it ages out.
+
+**Minimal records — Vectorize is an index, not a datastore.** Per vector we keep
+only the embedding, a stable id (`record_uuid`), a few *filterable* metadata fields
+(place_id, category, time/geo bucket), and a pointer back to D1/R2. Raw and compressed
+text never go in the vector. Metadata size does **not** affect billing (10 KiB/vector
+cap; indexed strings index only the first 64 bytes) — so "minimal" buys query speed and
+headroom, not a lower bill. The two real cost levers are **vector count** and
+**dimensions**:
+
+- Compressing N raw reviews per place into 1–few critical-info embeddings cuts stored
+  *and* queried dimensions proportionally (and is better LLM signal).
+- Embedding dimension is a direct multiplier (384 / 768 / 1024 ≈ 2.7× spread). The build
+  uses 1024-dim bge-m3 (§5); move to a smaller model only if recall holds.
+
+**Cold + hot → LLM.** Query Vectorize → get ids/pointers → hydrate the *cold* compressed
+critical_info from D1 (raw payloads stay in R2 cold) → merge with *hot* live data (price,
+availability, current conditions) → hand to the LLM for secondary planning. Vectorize
+does semantic retrieval only.
+
+**Partitioning.** Namespaces are flat, single-level string labels (≤64 bytes; ~1,000 per
+index on free, up to 50k paid). No nesting, no prefix/wildcard match; a vector lives in
+exactly one namespace; a query targets **one** namespace or none (no cross-namespace
+query). For cross-cutting selection (e.g. "all stores, 2026 only") use **metadata
+filters** (`$in`, ranges, combinable) and reserve a namespace for the one hard partition
+you always scope to. A query may combine a namespace + a metadata filter.
+
+**Retention / expiry — design for it; there is no TTL.** Deletion is `deleteByIds`
+**only** — no delete-by-namespace, no delete-by-filter, no auto-expiry. Two viable
+patterns for annual roll-off:
+
+- *Index-per-period (preferred for whole-cohort expiry):* one index per retention window
+  (`reviews-2026`…). Expiring a year is `wrangler vectorize delete reviews-2025` — instant,
+  no id list. Cross-year queries fan out across indexes; all shards must share
+  dimensions/metric (index config is immutable).
+- *D1-ledger sweep (one index, mixed cohorts):* we already map Vectorize hits → D1
+  `place_critical_info`, so delete by query —
+  `SELECT record_uuid FROM place_critical_info WHERE last_processed_at < :cutoff` → batch
+  into `deleteByIds` (≤1,000 ids/call). Replaces paginating `list-vectors` and needs no
+  cleanup-only metadata index. Use ULIDs / deterministic ids, **not** a hand-rolled
+  incrementing counter (needs an atomic source, buys nothing).
+
+Both paths: deletes are async (queryable change in ~5–10 s), are **not billed**, and
+*reduce* stored-dimension cost.
+
+**Export (migration off Vectorize).** No single dump endpoint, but `list-vectors`
+(paginated, 1,000 ids/page) + `getByIds` (values + metadata) reconstructs a full export
+to NDJSON. Neither is a similarity *query*, so neither is billed as queried dimensions —
+export is effectively free from Vectorize's side (cost is just the compute/egress running
+the loop). If the target DB re-embeds from source text, you often only need to export
+ids + metadata.
+
+**Cross-cloud / AWS access.** Vectorize has a plain REST API
+(`POST /client/v4/accounts/{account_id}/vectorize/v2/indexes/{index}/{insert|upsert|query|get_by_ids|delete_by_ids|list_vectors}`),
+auth via account id + API token (official Python client exists). Any AWS compute
+(Lambda/ECS/EC2) can call it over HTTPS — but it's public-internet HTTPS to Cloudflare's
+API (no VPC peering / PrivateLink), so factor cross-cloud latency, the HTTP-API batch
+ceiling (5,000 vectors/call), and the ~5–10 s mutation lag.
+
+**Pricing model (Workers Paid).** Billed on two metrics only:
+
+| Metric | Free | Paid |
+|--------|------|------|
+| Stored vector dimensions | 5M | first 10M free, then `$0.05 / 100M` |
+| Queried vector dimensions | 30M / mo | first 50M / mo free, then `$0.01 / 1M` |
+
+Queried dimensions ≈ `(stored_vectors + queries) × dimensions` per month — a query's
+billable cost scales with **total vectors in the index**. Not billed: CPU, memory, active
+hours, number of indexes, or namespaces. This is the cost case for index-per-shard +
+compression: a query on a small yearly shard doesn't pay for other years' vectors.
+
+---
+
+## 13. Out of scope
 
 Consumer API, Flutter app (deferred until frontend design), cron automation
 (disabled in prototyping), and any user-facing rendering of critical info.
