@@ -27,6 +27,37 @@ pull data with no credential, **9 have a working delta**. The cleanest deltas ar
 parameter APIs (Wikidata `dateModified`, Socrata `:updated_at`), changes-feeds (MediaWiki
 RecentChanges), and dated bulk releases (Foursquare/Overture/OSM/GeoNames).
 
+## Reclassification + Chrome fallback (every source)
+
+Every API/data connector is now wrapped so that **when the API path yields no data**
+(needs_key / needs_license / blocked), it **automatically falls back to the source's Chrome
+browser-scrape strategy** (one page, one visit, human-paced — `core/fallback.ts`). Run the API
+pool with `--fallback` to enable it (`tsx scripts/connectors/run.ts all --fallback`). 61 sources
+pair to a browser strategy by identical id; 8 via an alias map (`google-places→google-maps`,
+`yelp-fusion/yelp-data-licensing→yelp`, `tripadvisor-content→tripadvisor`,
+`atlas-obscura→atlas-obscura-web`, `naver-local/naver-blog→naver-map`,
+`expedia-rapid→expedia-hotels-com`, `foursquare-places-api/foursquare-consumer→foursquare`).
+
+Each source now carries a **final classification** of how its data is actually obtainable:
+
+| Classification | Count | Meaning |
+|----------------|------:|---------|
+| `open` | 11 | Pull directly, no credentials (Tier A open/bulk) |
+| `api-key` | 26 | API works with a key **+ Chrome fallback wired** |
+| `api-license` | 32 | API behind a paid/partner licence **+ Chrome fallback wired** |
+| `browser` | 26 | No usable public API — **Chrome scrape is the path** (renders fine) |
+| `no-public-source` | 2 | No public API **and** no public website — `factual` (defunct), `douyin-life` (app-only) |
+
+**Net: 95 / 97 sources are obtainable** — directly (11), via key/licence with a Chrome backstop
+(58), or via Chrome scrape (26). Only 2 have no public surface at all. Sources whose Chrome path
+hits an enterprise WAF (DataDome/Cloudflare) reclassify to **`browser+proxy`** at runtime under
+`--fallback` (they need a residential `BROWSER_PROXY`); statically they list under `browser`.
+
+**Verified live** (`run.ts <ids> --fallback`): the wrapper auto-engages Chrome when the API has
+no data — `google-places` (API needs_key) → 5 records via google-maps; `hot-pepper-gourmet`
+(needs_key) → 5; `tabelog` (API blocked) → 5; while `klook` (needs_license) and
+`tripadvisor-content` (needs_key) reach Chrome but hit DataDome → reclassified `browser+proxy`.
+
 ### Two answers, distilled
 
 - **Doable now (zero cost):** the open tier — Wikidata, Wikipedia, Wikivoyage, DBpedia,

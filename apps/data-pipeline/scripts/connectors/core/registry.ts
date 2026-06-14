@@ -10,9 +10,10 @@ import { tierCConnectors } from '../tierC/index.js';
 import { tierDConnectors } from '../tierD/index.js';
 import { tierEConnectors } from '../tierE/index.js';
 import { browserConnectors } from '../browser/strategies.js';
+import { pairFallbacks } from './fallback.js';
 
-/** API / data connectors (default registry). */
-export const ALL_CONNECTORS: SourceConnector[] = [
+/** Raw API/data connectors before fallback wrapping. */
+const RAW_API_CONNECTORS: SourceConnector[] = [
   ...tierAConnectors,
   ...tierBConnectors,
   ...tierCConnectors,
@@ -22,6 +23,12 @@ export const ALL_CONNECTORS: SourceConnector[] = [
 
 /** Browser-scrape connectors (run with `--browser`, one page/visit, human-paced). */
 export const BROWSER_CONNECTORS: SourceConnector[] = [...browserConnectors];
+
+/**
+ * Default registry: every API/data connector wrapped with its Chrome browser
+ * fallback (auto-used when the API path yields no data and `--fallback` is set).
+ */
+export const ALL_CONNECTORS: SourceConnector[] = pairFallbacks(RAW_API_CONNECTORS, BROWSER_CONNECTORS);
 
 export function selectFrom(pool: SourceConnector[], selector: string): SourceConnector[] {
   const s = selector.trim();

@@ -113,6 +113,8 @@ function printMatrix(results: PullResult[], verbose: boolean) {
     tier: r.tier,
     id: r.source,
     status: STATUS_ICON[r.status] ?? r.status,
+    path: r.path ?? '',
+    cls: r.classification ?? '',
     recs: String(r.recordCount),
     incr: `${r.incremental.supported ? '✓' : '✗'} ${r.incremental.method}`,
     fp: r.sourceFingerprint.method,
@@ -122,6 +124,8 @@ function printMatrix(results: PullResult[], verbose: boolean) {
     ['tier', 'TIER'],
     ['id', 'CONNECTOR'],
     ['status', 'STATUS'],
+    ['cls', 'CLASSIFICATION'],
+    ['path', 'PATH'],
     ['recs', 'RECS'],
     ['incr', 'INCREMENTAL'],
     ['fp', 'FINGERPRINT'],
@@ -150,14 +154,28 @@ function printMatrix(results: PullResult[], verbose: boolean) {
         .join('  ') +
       `  | incremental-supported:${sum.incrementalSupported}\n`,
   );
+  if (Object.keys(sum.byClassification).length) {
+    process.stdout.write(
+      `classification | ` +
+        Object.entries(sum.byClassification)
+          .map(([k, v]) => `${k}:${v}`)
+          .join('  ') +
+        '\n',
+    );
+  }
 }
 
 export function summarize(results: PullResult[]) {
   const byStatus: Record<string, number> = {};
-  for (const r of results) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+  const byClassification: Record<string, number> = {};
+  for (const r of results) {
+    byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+    if (r.classification) byClassification[r.classification] = (byClassification[r.classification] ?? 0) + 1;
+  }
   return {
     total: results.length,
     byStatus,
+    byClassification,
     incrementalSupported: results.filter((r) => r.incremental.supported).length,
     totalRecords: results.reduce((a, r) => a + r.recordCount, 0),
     generatedAt: new Date().toISOString(),
