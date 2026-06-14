@@ -1,6 +1,7 @@
 import { IngestRegion } from './workflows/ingest-region.js';
 import { enrichBatch } from './consumers/enrich.js';
 import type { Env, IngestParams, EnrichMessage } from './env.js';
+import { routePool } from './pool/handlers.js';
 
 // Default region seeded for cron re-ingest; ad-hoc runs override via POST body.
 // Convention: bbox = [south, west, north, east] (Overpass order).
@@ -22,6 +23,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === '/health') return new Response('ok');
+
+    const poolRes = await routePool(request, url, env);
+    if (poolRes) return poolRes;
 
     if (request.method === 'POST' && url.pathname === '/ingest') {
       // Fix 2: Authenticate — fail closed if token unset or header missing/wrong.
