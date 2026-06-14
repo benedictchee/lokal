@@ -122,17 +122,33 @@ export async function headFingerprint(
 }
 
 /**
- * Detect a bot-challenge / WAF interstitial so connectors can report "blocked by
- * Cloudflare" instead of a misleading parse failure. Heuristic but high-signal.
+ * Detect a bot-challenge / WAF / anti-bot interstitial so connectors report
+ * "blocked (needs proxy)" instead of a misleading 0-items parse result.
+ * Heuristic but high-signal; `urlAfter` (optional) catches login/captcha redirects.
  */
-export function looksLikeChallenge(status: number, body: string): string | null {
-  const b = body.slice(0, 1500).toLowerCase();
-  if (status === 403 && (b.includes('just a moment') || b.includes('cf-chl') || b.includes('challenges.cloudflare.com')))
-    return 'Cloudflare challenge (403 "Just a moment")';
-  if (b.includes('px-captcha') || b.includes('perimeterx') || b.includes('_px')) return 'PerimeterX/HUMAN challenge';
+export function looksLikeChallenge(status: number, body: string, urlAfter?: string): string | null {
+  const b = body.slice(0, 4000).toLowerCase();
+  const u = (urlAfter ?? '').toLowerCase();
+  // Vendor fingerprints (any status).
+  if (b.includes('just a moment') || b.includes('cf-chl') || b.includes('challenges.cloudflare.com'))
+    return 'Cloudflare challenge';
   if (b.includes('datadome')) return 'DataDome challenge';
-  if (status === 429) return 'rate-limited (HTTP 429)';
+  if (b.includes('px-captcha') || b.includes('perimeterx') || b.includes('_pxhd')) return 'PerimeterX/HUMAN challenge';
+  if (b.includes('captcha.gtimg') || b.includes('turing.captcha') || b.includes('geetest') || b.includes('aliyun') && b.includes('captcha'))
+    return 'CAPTCHA (anti-bot)';
+  if (b.includes('are you not a robot') || b.includes('showcaptcha') || u.includes('showcaptcha')) return 'Yandex SmartCaptcha';
+  // Generic WAF interstitials.
+  if (b.includes('access denied') || b.includes('request could not be satisfied') || b.includes('pardon our interruption') || b.includes('attention required'))
+    return 'WAF block (Access Denied)';
+  // Redirected to a login or captcha gate instead of content.
+  if (u.includes('/login') || u.includes('signin') || u.includes('/captcha') || u.includes('/win-together'))
+    return 'redirected to login/gate';
+  // Anti-bot HTTP statuses.
+  if (status === 429) return 'rate-limited (429)';
+  if (status === 432) return 'anti-bot (432)';
   if (status === 451) return 'unavailable for legal reasons (451)';
+  if (status === 403) return 'forbidden (403)';
+  if (status === 503) return 'unavailable (503)';
   return null;
 }
 

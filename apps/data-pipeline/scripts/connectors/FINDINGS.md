@@ -27,6 +27,51 @@ pull data with no credential, **9 have a working delta**. The cleanest deltas ar
 parameter APIs (Wikidata `dateModified`, Socrata `:updated_at`), changes-feeds (MediaWiki
 RecentChanges), and dated bulk releases (Foursquare/Overture/OSM/GeoNames).
 
+## Reclassification + Chrome fallback (every source)
+
+Every API/data connector is now wrapped so that **when the API path yields no data**
+(needs_key / needs_license / blocked), it **automatically falls back to the source's Chrome
+browser-scrape strategy** (one page, one visit, human-paced — `core/fallback.ts`). Run the API
+pool with `--fallback` to enable it (`tsx scripts/connectors/run.ts all --fallback`). 61 sources
+pair to a browser strategy by identical id; 8 via an alias map (`google-places→google-maps`,
+`yelp-fusion/yelp-data-licensing→yelp`, `tripadvisor-content→tripadvisor`,
+`atlas-obscura→atlas-obscura-web`, `naver-local/naver-blog→naver-map`,
+`expedia-rapid→expedia-hotels-com`, `foursquare-places-api/foursquare-consumer→foursquare`).
+
+Each source now carries a **final classification** of how its data is actually obtainable:
+
+| Classification | Count | Meaning |
+|----------------|------:|---------|
+| `open` | 11 | Pull directly, no credentials (Tier A open/bulk) |
+| `api-key` | 26 | API works with a key **+ Chrome fallback wired** |
+| `api-license` | 32 | API behind a paid/partner licence **+ Chrome fallback wired** |
+| `browser` | 26 | No usable public API — **Chrome scrape is the path** (renders fine) |
+| `no-public-source` | 2 | No public API **and** no public website — `factual` (defunct), `douyin-life` (app-only) |
+
+**Net: 95 / 97 sources are obtainable** — directly (11), via key/licence with a Chrome backstop
+(58), or via Chrome scrape (26). Only 2 have no public surface at all. Sources whose Chrome path
+hits an enterprise WAF (DataDome/Cloudflare) reclassify to **`browser+proxy`** at runtime under
+`--fallback` (they need a residential `BROWSER_PROXY`); statically they list under `browser`.
+
+**Verified live** (`run.ts <ids> --fallback`): the wrapper auto-engages Chrome when the API has
+no data — `google-places` (API needs_key) → 5 records via google-maps; `hot-pepper-gourmet`
+(needs_key) → 5; `tabelog` (API blocked) → 5; while `klook` (needs_license) and
+`tripadvisor-content` (needs_key) reach Chrome but hit DataDome → reclassified `browser+proxy`.
+
+### "Reached but 0 items" drill-down
+
+A DOM diagnostic (`_gen/diagnose-zero.ts`) over the ~21 sources that loaded but extracted nothing
+found that **only one was a true selector bug** — **booking-com** (its search bounced to the
+homepage, so the property-card grid never rendered; fixed with a resilient `/hotel/<cc>/<slug>.html`
+extractor → now 5 real hotels). The rest were **anti-bot walls the detector initially missed**:
+Access-Denied 403s (zomato, opentable, culture-trip, siksin, reddit), CAPTCHA iframes
+(mafengwo, tongcheng, yandex-eda), HTTP 432 (ctrip), login/captcha/onboarding redirects
+(foursquare→login, meituan→/win-together, 2gis→/museum), and empty SPA shells (amap, catchtable).
+`looksLikeChallenge` was hardened (Access-Denied / CAPTCHA / 432 / 503 / login-redirect / tiny-shell
+detection), so these now correctly report **`browser+proxy`** (need a residential `BROWSER_PROXY`)
+instead of a misleading `partial / 0 items`. A handful of canvas/XHR SPAs (naver, qunar, swiggy,
+trip-com, tongcheng) render content with no scrapable anchors and remain drill-down candidates.
+
 ### Two answers, distilled
 
 - **Doable now (zero cost):** the open tier — Wikidata, Wikipedia, Wikivoyage, DBpedia,
@@ -134,50 +179,69 @@ RecentChanges), and dated bulk releases (Foursquare/Overture/OSM/GeoNames).
   deltas; the OTAs/merchant platforms are licence-gated; the native-language community leaders are
   WAF-walled. This matches the catalog's licensing tiers and is now demonstrated by live probes.
 
-## Browser-scraping (the "other way" for key/licence-gated + blocked sources)
+## Browser-scraping coverage — what's available, what's not
 
-For every source that needs a key/licence or has no API, there is a **browser-scrape connector**
-that drives **system Chrome** like a normal user: **one page, one visit per run**, human dwell +
-gentle scroll, sequential with pacing (`--browser`, default 4s between sources) — no pagination,
-no parallel hammering. Run: `tsx scripts/connectors/run.ts <all|id> --browser`.
+Browser connectors drive **system Chrome** like a normal user: **one page, one visit per run**,
+human dwell + gentle scroll + jitter, sequential with pacing — no pagination, no parallel hammering.
+Run `tsx scripts/connectors/run.ts <all|id> --browser`, or `--fallback` to let API connectors fall
+back to Chrome when the API has no data. A full no-keys `--fallback` run over all 97 sources gives:
 
-**Measured doability (live):**
+### ✅ Available via browser / open — 45
 
-| Site | Result | Notes |
-|------|--------|-------|
-| Google Maps | 🟢 6 records | real names + `ChIJ…` place IDs (stable) — the public alternative to the key-gated Places API |
-| Tabelog (JP) | 🟢 8 records | renders fine in Chrome though its sitemap is walled |
-| Wongnai (TH) | 🟢 8 records | listing scrape works (sub-elements deduped downstream) |
-| 2GIS (RU) | 🟡 0 | SPA — needs a longer wait / result-container selector (drill down) |
-| Yelp / TripAdvisor | 🔴 blocked | **DataDome** 403 at the TLS/IP edge — even headed + stealth |
-| Atlas Obscura / AllTrails | 🔴 blocked | **Cloudflare-managed** challenge — same |
+> open data + browser-scraped with **real records, one page each**.
 
-**At scale — 68 browser connectors** (`run.ts <all> --browser`), with selectors verified live per
-source. A 10-source spot-run across clusters: **7 extracted real records from one page each** —
-including licence-gated sources — and the 3 hard ones were correctly flagged for a proxy:
+Open (11): `wikidata, wikipedia, wikivoyage, dbpedia, osm-overpass, osm-planet-geofabrik, geonames,
+socrata-us, datatourisme, overture, foursquare-os-places`.
+Browser (34): `google-places, google-hotels, agoda, booking-com, viator, resy, hostelworld, chope,
+fliggy, yanolja, michelin-guide, kakaomap, hot-pepper-gourmet, jalan, lonely-planet, retty, navitime,
+jorudan, time-out, tabelog, wongnai, magicpin, burpple, hungrygowhere, foody-shopeefood, eatigo,
+diningcode, happycow, airbnb, jnto-content, yandex-maps, talabat, sygic-travel, xiaohongshu`.
 
-| Site | Result | | Site | Result |
-|------|--------|-|------|--------|
-| Hot Pepper Gourmet (JP) | 🟢 6 | | Michelin Guide | 🟢 6 |
-| Jalan (JP) | 🟢 6 | | HappyCow | 🟢 6 |
-| KakaoMap (KR) | 🟢 5 | | Talabat (MENA) | 🟢 6 |
-| Sygic→Tripomatic | 🟢 6 | | Booking.com | 🟡 0 (interstitial → proxy) |
-| Zomato | 🟡 0 (DataDome → proxy) | | Klook | 🔴 DataDome → proxy |
+Real records confirmed (samples): Google Maps (`ChIJ…` ids), Tabelog (食べlog scores), Booking.com
+(hotel slugs + ratings), Michelin, KakaoMap, Hot Pepper, Jalan, HappyCow, Talabat, Yandex Maps.
 
-**What works:** plain headless system-Chrome scrapes any site that merely JS-renders — most
-sources, including ones that were API-gated (Google Maps, Hot Pepper, KakaoMap, Jalan) or
-licence-gated (Michelin), and community sites (Tabelog, Wongnai, HappyCow, Talabat).
+### 🔴 WAF-blocked — 23 (need an alternative source / residential proxy)
 
-**What needs more:** sites behind enterprise bot-management (DataDome: Yelp/TripAdvisor;
-Cloudflare-managed: Atlas Obscura/AllTrails) reject a datacenter IP regardless of stealth. This is
-an **infrastructure** requirement, not a code gap. The framework detects the exact wall and the
-connectors expose a **pluggable escalation**: set `BROWSER_PROXY` to a residential proxy /
-unblocker endpoint (and optionally `BROWSER_HEADFUL=1`). With that, the same one-page strategy runs
-through the proxy — no code change.
+> Chrome reaches them but enterprise bot-management blocks a datacenter IP — DataDome, Cloudflare,
+> Access-Denied 403, CAPTCHA, or login redirect. Detected at runtime → reported `browser+proxy`.
 
-> Passive stealth (patched `navigator.webdriver`, automation flags off, Cloudflare auto-challenge
-> wait) was tested and does **not** beat DataDome/Cloudflare from a datacenter IP — confirming the
-> proxy/unblocker is the real lever for those few sources.
+`yelp-fusion, yelp-data-licensing, tripadvisor-content, tripadvisor-forums, klook, getyourguide,
+thefork, expedia-rapid, opentable, traveloka, untappd, zomato, culture-trip, reddit, siksin,
+atlas-obscura, alltrails, ctrip, meituan, qyer, yandex-eda, foursquare-places-api, foursquare-consumer`.
+
+Fix path (not code): set `BROWSER_PROXY` to a residential proxy/unblocker (+ optional
+`BROWSER_HEADFUL=1`). Passive stealth alone (patched `navigator.webdriver`, automation flags off,
+challenge-wait) does **not** beat DataDome/Cloudflare from a datacenter IP — the proxy is the lever.
+
+### ⚠️ NOT browser-scrapable — 29
+
+**a. Data-provider APIs — no public website to scrape (13).**
+`mapbox, tomtom, here-dev, here-bulk, apple-maps, safegraph, placer-ai, opentripmap,
+wikimedia-enterprise, atdw, txgb-visitbritain, visit-finland, tourism-nz`.
+There is no consumer site — only a data feed. **Get via their API/licensed feed.** Most overlap
+coverage we already pull openly (Foursquare/Overture/OSM/Wikidata), so they're largely not a real gap.
+
+**b. No public source at all (2).**
+`factual` (defunct → successor **Foursquare OS Places** is in the ✅ set) · `douyin-life` (app-only
+video; no web listing — needs a partnership). **`douyin-life` is the only genuinely unreachable source.**
+
+**c. SPA / heavy anti-bot — content renders but no scrapable HTML (14).**
+`amap, baidu-maps, dianping, mafengwo, qunar, 2gis, naver-local, naver-blog, catchtable,
+yeogi-goodchoice, swiggy-dineout, qraved, tongcheng, trip-com`.
+Mostly China/Korea super-apps that draw results into canvas/JSON via XHR (a DOM selector finds
+nothing; several also throw CAPTCHA/432). Recover via their **internal JSON XHR endpoint**
+(per-site reverse-engineering — several, e.g. Naver/Kakao, expose JSON APIs) or a **regional
+residential proxy + headed browser**. Same "needs an alternative/proxy" category as WAF.
+
+### How the framework behaves (anti-detection + politeness)
+
+- **One page, one visit** per source per run; human dwell/scroll/jitter; `--browser`/`--fallback`
+  run sequentially with pacing (no parallel hammering, no pagination).
+- **Block detection**: DataDome / Cloudflare / PerimeterX / Access-Denied / CAPTCHA iframes /
+  Yandex SmartCaptcha / login-or-captcha redirect / HTTP 403·432·451·503 / empty-shell → reported
+  as `browser+proxy` rather than a misleading "0 items".
+- **Pluggable proxy**: `BROWSER_PROXY` routes the same one-page strategy through a residential
+  proxy/unblocker for WAF + regional sites — no code change.
 
 ## Next (drill-down candidates, per source)
 

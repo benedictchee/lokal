@@ -77,6 +77,7 @@ export interface ScrapeOutcome<T> {
   status: number;
   bodyLen: number;
   title: string;
+  finalUrl?: string;
 }
 
 /** Human-ish jittered delay. */
@@ -123,7 +124,7 @@ export async function scrapePage<T>(
     }
     // Quick challenge check right after load (cheap signal before we invest time).
     const earlyTitle = await page.title().catch(() => '');
-    let challenge = looksLikeChallenge(status, `${earlyTitle}\n${await page.content().catch(() => '')}`);
+    let challenge = looksLikeChallenge(status, `${earlyTitle}\n${await page.content().catch(() => '')}`, page.url());
     if (challenge) {
       return { items: [], challenge, status, bodyLen: 0, title: earlyTitle };
     }
@@ -148,10 +149,15 @@ export async function scrapePage<T>(
     if (opts.waitFor) await page.waitForSelector(opts.waitFor, { timeout: 8000 }).catch(() => {});
     await humanDwell(page); // read the single page naturally
     const title = await page.title().catch(() => earlyTitle);
+    const finalUrl = page.url();
     const bodyLen = (await page.evaluate(() => document.body?.innerText?.length ?? 0).catch(() => 0)) as number;
-    challenge = looksLikeChallenge(status, `${title}\n${await page.content().catch(() => '')}`);
-    if (challenge) return { items: [], challenge, status, bodyLen, title };
+    challenge = looksLikeChallenge(status, `${title}\n${await page.content().catch(() => '')}`, finalUrl);
+    if (challenge) return { items: [], challenge, status, bodyLen, title, finalUrl };
     const items = await extract(page).catch(() => [] as T[]);
-    return { items, challenge: null, status, bodyLen, title };
+    // Rendered to a near-empty shell with nothing extracted → soft anti-bot / not the real page.
+    if (items.length === 0 && bodyLen < 400) {
+      return { items: [], challenge: 'empty/anti-bot shell (no content rendered)', status, bodyLen, title, finalUrl };
+    }
+    return { items, challenge: null, status, bodyLen, title, finalUrl };
   }, opts);
 }

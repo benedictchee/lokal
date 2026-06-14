@@ -38,28 +38,35 @@ export const browserOta: BrowserStrategy[] = [
     tier: 'D',
     coverage: 'Global; hotels/properties + review scores',
     access: 'Public booking.com/searchresults (alternative to the partner-gated Demand API, which forbids review egress).',
-    listUrl: (input) =>
-      `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(input.region ?? 'Penang, Malaysia')}`,
-    waitFor: '[data-testid="property-card"]',
+    listUrl: (input) => `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(input.region ?? 'Penang')}&lang=en-us`,
+    waitFor: 'a[href*="/hotel/"]',
     consentSelectors: ['#onetrust-accept-btn-handler', 'button[aria-label="Accept"]'],
     incremental: full('One search page per run; diff property set + review-score by content_hash. No web sort-by-updated.'),
-    note: 'Booking serves a 202 interstitial / consent wall to datacenter IPs — if 0 items, needs BROWSER_PROXY (residential/unblocker). Class names are randomised; data-testid is the stable hook.',
-    // Property name lives in [data-testid="title"] inside the card; the card's title-link carries the /hotel/ slug.
+    note: 'Booking serves a 202 interstitial to datacenter IPs and may bounce an unmatched search to the homepage; if 0 items, needs BROWSER_PROXY. Property cards use data-testid; hotel slugs live in /hotel/<cc>/<slug>.html links.',
+    // Prefer the property-card grid; fall back to any /hotel/<cc>/<slug>.html anchor
+    // (present even on the homepage bounce) so we still extract real hotels.
     extract: (page, limit) =>
-      page.$$eval('[data-testid="property-card"]', (cards, max) =>
-        cards.slice(0, max as number).map((card) => {
-          const a = card.querySelector('a[data-testid="title-link"]') as HTMLAnchorElement | null;
-          const href = a?.href ?? '';
-          const title = card.querySelector('[data-testid="title"]');
-          const slug = href.match(/\/hotel\/[a-z]{2}\/([^.?#/]+)/)?.[1] ?? href.slice(0, 80);
-          return {
-            sourceId: slug,
-            name: (title?.textContent ?? a?.textContent ?? '').trim().replace(/\s+/g, ' '),
-            url: href,
-            raw: { href, name: (title?.textContent ?? '').trim().replace(/\s+/g, ' ') },
-          };
-        }),
-      limit),
+      page.$$eval(
+        'a[href*="/hotel/"]',
+        (els, max) => {
+          const seen = new Set<string>();
+          const out: Array<{ sourceId: string; name: string; url: string; raw: unknown }> = [];
+          for (const e of els) {
+            const a = e as unknown as { href: string; textContent: string | null; closest(s: string): { querySelector(q: string): { textContent: string | null } | null } | null };
+            const m = a.href.match(/\/hotel\/[a-z]{2}\/([^.?#/]+)\.html/);
+            if (!m) continue;
+            const slug = m[1];
+            if (seen.has(slug)) continue;
+            seen.add(slug);
+            const card = a.closest('[data-testid="property-card"]');
+            const title = card?.querySelector('[data-testid="title"]')?.textContent ?? a.textContent ?? '';
+            out.push({ sourceId: slug, name: title.trim().replace(/\s+/g, ' '), url: a.href, raw: { href: a.href } });
+            if (out.length >= (max as number)) break;
+          }
+          return out;
+        },
+        limit,
+      ),
   },
 
   /* ── agoda ─ hotels; SPA, lazy cards; id = data-hotelid ── */

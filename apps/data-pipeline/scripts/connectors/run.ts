@@ -23,15 +23,18 @@ function flag(name: string): boolean {
 }
 
 async function main() {
+  // --browser  : run the pure browser-scrape pool directly.
+  // --fallback : run the API pool, auto-falling back to Chrome where the API yields no data.
   const browserMode = flag('browser');
+  const fallbackMode = flag('fallback');
   const pool = browserMode ? BROWSER_CONNECTORS : ALL_CONNECTORS;
   const selector = process.argv[2];
   if (!selector || flag('list')) {
-    process.stdout.write(`API/data connectors (${ALL_CONNECTORS.length}):\n`);
+    process.stdout.write(`API/data connectors (${ALL_CONNECTORS.length}) — each with a Chrome fallback where a public site exists:\n`);
     for (const c of ALL_CONNECTORS) process.stdout.write(`  [${c.tier}] ${c.id.padEnd(28)} ${c.displayName}\n`);
     process.stdout.write(`\nBrowser-scrape connectors (${BROWSER_CONNECTORS.length}) — run with --browser:\n`);
     for (const c of BROWSER_CONNECTORS) process.stdout.write(`  [${c.tier}] ${c.id.padEnd(28)} ${c.displayName}\n`);
-    process.stdout.write(`\nUsage: tsx scripts/connectors/run.ts <all|tierA..E|id,id> [--since=ISO] [--limit=N] [--browser] [--verbose]\n`);
+    process.stdout.write(`\nUsage: tsx scripts/connectors/run.ts <all|tierA..E|id,id> [--since=ISO] [--limit=N] [--browser|--fallback] [--verbose]\n`);
     return;
   }
   const connectors = selectFrom(pool, selector);
@@ -39,17 +42,19 @@ async function main() {
     process.stderr.write(`No connectors matched "${selector}"${browserMode ? ' in --browser pool' : ''}. Use --list.\n`);
     process.exit(1);
   }
-  if (browserMode) process.env.PROBE_BROWSER = '1'; // browser mode implies the gate
-  process.stderr.write(`Running ${connectors.length} ${browserMode ? 'browser ' : ''}connector(s): ${connectors.map((c) => c.id).join(', ')}\n`);
+  // Both browser and fallback modes need Chrome enabled + human pacing (Chrome may launch).
+  const usesBrowser = browserMode || fallbackMode;
+  if (usesBrowser) process.env.PROBE_BROWSER = '1';
+  process.stderr.write(`Running ${connectors.length} connector(s)${fallbackMode ? ' with Chrome fallback' : browserMode ? ' (browser pool)' : ''}: ${connectors.map((c) => c.id).join(', ')}\n`);
   await runConnectors(connectors, {
     sinceTimestamp: arg('since'),
     lastSnapshotFingerprint: arg('last-fp'),
     region: arg('region'),
     limit: arg('limit') ? Number(arg('limit')) : undefined,
-    // Browser mode: sequential + human pacing between sources (no robotic parallel hammering).
-    concurrency: arg('concurrency') ? Number(arg('concurrency')) : browserMode ? 1 : undefined,
-    paceMs: browserMode ? Number(arg('pace') ?? 4000) : undefined,
-    timeoutMs: arg('timeout') ? Number(arg('timeout')) : browserMode ? 60_000 : undefined,
+    // Browser/fallback: sequential + human pacing (no robotic parallel hammering).
+    concurrency: arg('concurrency') ? Number(arg('concurrency')) : usesBrowser ? 1 : undefined,
+    paceMs: usesBrowser ? Number(arg('pace') ?? 4000) : undefined,
+    timeoutMs: arg('timeout') ? Number(arg('timeout')) : usesBrowser ? 60_000 : undefined,
     verbose: flag('verbose'),
   });
 }

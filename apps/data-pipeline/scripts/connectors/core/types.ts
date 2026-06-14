@@ -117,6 +117,27 @@ export interface ConnectorDeps {
   timeoutMs: number;
 }
 
+/**
+ * Final classification of how a source's data is actually obtainable, after the
+ * API path AND the Chrome fallback have been considered:
+ *  - open           — pull directly, no credentials (Tier A open/bulk)
+ *  - api-key        — API works with a key; a Chrome fallback is also wired
+ *  - api-license    — API behind a paid/partner licence; Chrome fallback wired
+ *  - browser        — no usable public API; Chrome scrape works
+ *  - browser+proxy  — Chrome reaches it but a WAF needs a residential proxy/unblocker
+ *  - no-public-source — no public API AND no public website (pure data provider) → licence the feed
+ */
+export type Classification =
+  | 'open'
+  | 'api-key'
+  | 'api-license'
+  | 'browser'
+  | 'browser+proxy'
+  | 'no-public-source';
+
+/** Which path produced the returned records. */
+export type DataPath = 'open' | 'api' | 'browser-fallback' | 'none';
+
 /** The uniform OUTPUT envelope every connector returns. */
 export interface PullResult {
   source: string; // connector id
@@ -139,6 +160,15 @@ export interface PullResult {
   /** Human-readable findings — especially WHY a source is blocked/needs_key. */
   notes: string[];
   error?: string;
+  // --- Set by the browser-fallback wrapper (core/fallback.ts) ---
+  /** Which path produced records this run. */
+  path?: DataPath;
+  /** Whether a Chrome fallback strategy is wired for this source. */
+  fallbackAvailable?: boolean;
+  /** Original API-path status, retained when the browser fallback supersedes it. */
+  apiStatus?: ConnectorStatus;
+  /** Final how-to-get-the-data classification. */
+  classification?: Classification;
 }
 
 /** Static, declared plan for a source — the "method" half of the experiment. */

@@ -56,6 +56,52 @@ customised per source**, picking the cheapest signal that flips when the source 
 `etag-conditional` › `full-only` › `none`. Each connector declares the best realistic method for
 its source in `plan.incremental` and applies it (using `input.sinceTimestamp`) when possible.
 
+## Two paths per source + Chrome fallback
+
+Every source has up to two ways in, and the framework prefers the sanctioned one:
+
+1. **API/data path** — the default `ALL_CONNECTORS`. Pulls open data directly, or probes
+   key/licence-gated APIs.
+2. **Browser path** — a Chrome scrape of the public site ([browser/strategies.ts](browser/strategies.ts)),
+   driven like a normal user: **one page, one visit per run**, human dwell + scroll + jitter,
+   sequential with pacing — no pagination, no parallel hammering. Hard WAFs (DataDome/Cloudflare)
+   are detected and expose a pluggable `BROWSER_PROXY` (residential/unblocker) escalation.
+
+With **`--fallback`**, each API connector is wrapped ([core/fallback.ts](core/fallback.ts)) so that
+when the API yields no data (`needs_key` / `needs_license` / `blocked` / `error`) it **auto-falls
+back to that source's Chrome strategy**. 61 sources pair by identical id; 8 via an alias map
+(`google-places→google-maps`, `tripadvisor-content→tripadvisor`, `naver-local→naver-map`, …).
+
+### Classification — how each source's data is actually obtainable
+
+Every `PullResult` is stamped with a `classification` (and `path`, `apiStatus`, `fallbackAvailable`):
+
+| Classification | Meaning |
+|----------------|---------|
+| `open` | pull directly, no credentials (Tier A) |
+| `api-key` | API works with a key **+ Chrome fallback wired** |
+| `api-license` | API behind a paid/partner licence **+ Chrome fallback wired** |
+| `browser` | no usable public API — Chrome scrape is the path |
+| `browser+proxy` | Chrome reaches it but a WAF needs a residential `BROWSER_PROXY` |
+| `no-public-source` | no public API **and** no public website (pure data provider) |
+
+See [FINDINGS.md](FINDINGS.md) for the per-source results (97 sources: open 11 · api-key 26 ·
+api-license 32 · browser 26 · no-public-source 2 → **95/97 obtainable**).
+
+### Browser-scraping coverage (assume no keys → everything routes to Chrome)
+
+| Bucket | Count | Meaning |
+|--------|------:|---------|
+| ✅ available via browser/open | 45 | open data + real records scraped, one page each |
+| 🔴 WAF-blocked | 23 | DataDome/Cloudflare/Access-Denied/CAPTCHA from a datacenter IP → need an alternative source or `BROWSER_PROXY` |
+| ⚠️ data-provider, no public site | 13 | no consumer site to scrape — get via their API/feed (mostly overlap our open sources) |
+| ⚠️ SPA / heavy anti-bot, no scrapable HTML | 14 | canvas/XHR super-apps (CN/KR) — need internal-JSON-XHR or a regional proxy |
+| ⛔ no public source | 2 | `factual` (→ Foursquare OS Places), `douyin-life` (app-only) |
+
+**The only genuinely unreachable source is `douyin-life`** (app-only). WAF + SPA sites are reachable
+with a residential `BROWSER_PROXY`; data-provider APIs are reachable via their feed. Full per-source
+lists in [FINDINGS.md](FINDINGS.md#browser-scraping-coverage--whats-available-whats-not).
+
 ## Running
 
 ```bash
@@ -70,11 +116,17 @@ npx tsx scripts/connectors/run.ts wikidata --limit=10 --verbose
 # a whole tier
 npx tsx scripts/connectors/run.ts tierA --since=2026-05-01T00:00:00Z --concurrency=6
 
-# everything (writes out/<id>.json + out/_summary.json, prints the matrix)
+# everything (writes out/<id>.json + out/_summary.json, prints status + classification matrix)
 npx tsx scripts/connectors/run.ts all --concurrency=8
 
-# enable the Chrome scrape path for no-API sources (uses system Chrome)
-PROBE_BROWSER=1 npx tsx scripts/connectors/run.ts atlas-obscura --verbose
+# API run WITH Chrome fallback where the API yields no data (sequential, human-paced)
+npx tsx scripts/connectors/run.ts all --fallback
+
+# scrape the public site directly via Chrome (the browser pool), one page/visit per source
+npx tsx scripts/connectors/run.ts tabelog,wongnai --browser --verbose
+
+# route the browser path through a residential proxy / unblocker for WAF-walled sites
+BROWSER_PROXY=http://user:pass@host:port npx tsx scripts/connectors/run.ts yelp --browser
 ```
 
 API keys are read from `process.env` (e.g. `GOOGLE_MAPS_API_KEY`, `YELP_API_KEY`,
@@ -94,12 +146,14 @@ a keyed source returns `needs_key` after a real probe that confirms the gate.
 ## Layout
 
 ```
-core/        types, connector wrapper, fingerprint+probe helpers, web/duck/browser helpers, runner, registry
+core/        types, connector wrapper, fingerprint+probe helpers, web/duck/browser helpers,
+             fallback (API→Chrome) wrapper, runner, registry
 tierA/       open/bulk-ingestible (live experiments: Wikidata, OSM, GeoNames, Foursquare, Overture, …)
 tierB/       licensable-commercial
 tierC/       API display/lookup-only
 tierD/       partner/affiliate-gated
 tierE/       scrape-only / no sanctioned access
+browser/     Chrome browser-scrape strategies (starter + per-cluster) → 68 browser connectors
 out/         per-connector PullResult JSON + _summary.json (gitignored)
-_gen/        the workflow script that generated the B–E connectors
+_gen/        workflow scripts + assemblers + doability probes (how B–E + browser strategies were generated)
 ```
