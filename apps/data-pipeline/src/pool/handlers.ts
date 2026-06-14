@@ -2,9 +2,16 @@ import type { PoolEnv } from './auth.js';
 import { authenticateDevice } from './auth.js';
 import { PoolUrlRegistryStore, PoolLeaseStore } from './pool-d1.js';
 import { POOL } from './config.js';
+import { fnv1a } from '@travel/pipeline-core';
+import { gunzipToString, base64ToBytes } from './gzip.js';
+import { sha256Hex } from './crypto.js';
 
 export interface LeaseJob { leaseId: string; url: string; host: string; engine: 'webview'; waitForSelector: string | null; dwellMs: number; }
 export interface LeaseReqBody { battery?: { pct?: number; charging?: boolean }; appForeground?: boolean; maxUrls?: number; }
+export interface ResultReqBody {
+  leaseId: string; status: number; finalUrl?: string; title?: string;
+  challenge: string | null; gzippedDomBase64: string; timings?: { loadMs?: number; totalMs?: number };
+}
 
 function addSeconds(iso: string, seconds: number): string {
   return new Date(new Date(iso).getTime() + seconds * 1000).toISOString();
@@ -56,8 +63,69 @@ export async function handleLease(request: Request, env: PoolEnv): Promise<Respo
   return json({ jobs });
 }
 
+/** POST /pool/results — store the rendered DOM, update registry state, close the lease. */
+export async function handleResults(request: Request, env: PoolEnv): Promise<Response> {
+  const deviceId = await authenticateDevice(request, env);
+  if (!deviceId) return new Response('unauthorized', { status: 401 });
+
+  let body: ResultReqBody;
+  try {
+    body = (await request.json()) as ResultReqBody;
+  } catch {
+    return new Response('bad request: invalid JSON', { status: 400 });
+  }
+  if (typeof body.leaseId !== 'string' || typeof body.gzippedDomBase64 !== 'string') {
+    return new Response('bad request: leaseId and gzippedDomBase64 required', { status: 400 });
+  }
+
+  const nowIso = new Date().toISOString();
+  const leases = new PoolLeaseStore(env.GROUPS);
+  const lease = await leases.getOpen(body.leaseId, nowIso);
+  if (!lease) {
+    const known = await env.GROUPS
+      .prepare("SELECT state, device_id FROM pool_lease WHERE lease_id = ?")
+      .bind(body.leaseId)
+      .first<{ state: string; device_id: string }>();
+    if (known && known.state === 'done' && known.device_id === deviceId) return json({ ok: true, duplicate: true });
+    return new Response('not found: no open lease for id', { status: 404 });
+  }
+  if (lease.device_id !== deviceId) return new Response('forbidden: lease belongs to another device', { status: 403 });
+
+  const reg = new PoolUrlRegistryStore(env.GROUPS);
+
+  if (body.challenge) {
+    const row = await reg.get(lease.url);
+    const n = (row?.consecutive_challenges ?? 0) + 1;
+    const backoffSec = Math.min(POOL.BACKOFF_BASE_SEC * 2 ** (n - 1), POOL.BACKOFF_MAX_SEC);
+    await reg.markChallenge(lease.url, addSeconds(nowIso, backoffSec));
+    await leases.markDone(body.leaseId);
+    return json({ ok: true, challenge: body.challenge });
+  }
+
+  const bytes = base64ToBytes(body.gzippedDomBase64);
+  const dom = await gunzipToString(bytes);
+  const contentHash = fnv1a(dom);
+  const key = `pool/${(await sha256Hex(lease.url)).slice(0, 16)}/${Date.parse(nowIso)}.html.gz`;
+  await env.DATA.put(key, bytes, {
+    httpMetadata: { contentType: 'text/html; charset=utf-8', contentEncoding: 'gzip' },
+    customMetadata: { url: lease.url, deviceId, leaseId: body.leaseId, contentHash, fetchedAt: nowIso },
+  });
+  await reg.markFetched(lease.url, contentHash, nowIso, addSeconds(nowIso, POOL.REFRESH_INTERVAL_SEC));
+  await leases.markDone(body.leaseId);
+  return json({ ok: true, contentHash, stored: key });
+}
+
+/** POST /pool/heartbeat — liveness; 200 if the device authenticates. */
+export async function handleHeartbeat(request: Request, env: PoolEnv): Promise<Response> {
+  const deviceId = await authenticateDevice(request, env);
+  if (!deviceId) return new Response('unauthorized', { status: 401 });
+  return json({ ok: true, deviceId });
+}
+
 /** Dispatch /pool/* routes. Returns null if the path is not a pool route. */
 export async function routePool(request: Request, url: URL, env: PoolEnv): Promise<Response | null> {
   if (request.method === 'POST' && url.pathname === '/pool/lease') return handleLease(request, env);
+  if (request.method === 'POST' && url.pathname === '/pool/results') return handleResults(request, env);
+  if (request.method === 'POST' && url.pathname === '/pool/heartbeat') return handleHeartbeat(request, env);
   return null;
 }
