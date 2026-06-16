@@ -1,4 +1,5 @@
 import type { IncrementalCapability, PullInput, Tier } from './types.js';
+import type { ParsedDocument } from './parse-html.js';
 
 /** A single scraped item (Playwright-free; identical to the old core/browser-connector shape). */
 export interface ScrapedItem {
@@ -26,20 +27,29 @@ export interface BrowserStrategy {
   waitFor?: string;
   consentSelectors?: string[];
   incremental: IncrementalCapability;
-  extract: (doc: Document, baseUrl: string, limit: number) => ScrapedItem[];
+  extract: (doc: ParsedDocument, baseUrl: string, limit: number) => ScrapedItem[];
   proxyEnv?: string;
   note?: string;
 }
 
+/**
+ * Minimal element shape the extractor touches — kept local so we never depend on
+ * the global lib.dom `Element` (linkedom's querySelectorAll is loosely typed).
+ */
+interface ExtractEl {
+  getAttribute(name: string): string | null;
+  textContent: string | null;
+}
+
 /** Generic anchor extractor: matching <a> → {sourceId,name,url} with absolute urls. */
 export function anchors(
-  doc: Document,
+  doc: ParsedDocument,
   baseUrl: string,
   selector: string,
   idFrom: (href: string) => string,
   limit: number,
 ): ScrapedItem[] {
-  return [...doc.querySelectorAll(selector)]
+  return Array.from(doc.querySelectorAll(selector) as Iterable<ExtractEl>)
     .slice(0, limit)
     .map((el) => {
       const raw = el.getAttribute('href') ?? '';
