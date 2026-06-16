@@ -27,6 +27,7 @@ export default defineConfig({
               miniflare: {
                 d1Databases: ["GROUPS"],
                 r2Buckets: ["DATA"],
+                queueProducers: { EXTRACT: "travel-extract" },
                 compatibilityDate: "2025-05-01",
                 compatibilityFlags: ["nodejs_compat"],
               },

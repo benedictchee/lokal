@@ -2,7 +2,9 @@ import type { Env } from '../env.js';
 import { PoolDeviceStore } from './pool-d1.js';
 import { sha256Hex } from './crypto.js';
 
-export type PoolEnv = Pick<Env, 'GROUPS' | 'DATA'>;
+export type PoolEnv = Pick<Env, 'GROUPS' | 'DATA'> & {
+  EXTRACT: { send(msg: { r2Key: string; url: string; source: string }): Promise<unknown> };
+};
 
 /**
  * Resolve a request's `Authorization: Bearer <token>` to a deviceId, or null.

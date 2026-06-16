@@ -115,16 +115,19 @@ export async function handleResults(request: Request, env: PoolEnv): Promise<Res
     return new Response(tooBig ? 'payload too large' : 'bad request: invalid gzip payload', { status: tooBig ? 413 : 400 });
   }
   const contentHash = fnv1a(dom);
+  const prior = await reg.get(lease.url);
   const key = `pool/${(await sha256Hex(lease.url)).slice(0, 16)}/${Date.parse(nowIso)}-${body.leaseId}.html.gz`;
   await env.DATA.put(key, bytes, {
     httpMetadata: { contentType: 'text/html; charset=utf-8', contentEncoding: 'gzip' },
     customMetadata: { url: lease.url, deviceId, leaseId: body.leaseId, contentHash, fetchedAt: nowIso },
   });
-  // NOTE: downstream extraction is not wired yet — the raw DOM is parked in R2 and the
-  // registry marked fetched. Wiring the extractor hop (DOM → PulledRecord → pipeline) is a
-  // tracked follow-up; see src/pool/README.md "Known follow-ups".
   await reg.markFetched(lease.url, contentHash, nowIso, addSeconds(nowIso, POOL.REFRESH_INTERVAL_SEC));
   await leases.markDone(body.leaseId);
+  // Content-hash skip: extract only when the DOM changed AND the URL is owned by a
+  // pilot connector. Unchanged DOM (same content_hash) is parked in R2, not re-extracted.
+  if (prior?.source && prior.content_hash !== contentHash) {
+    await env.EXTRACT.send({ r2Key: key, url: lease.url, source: prior.source });
+  }
   return json({ ok: true, contentHash, stored: key });
 }
 
