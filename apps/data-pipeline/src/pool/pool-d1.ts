@@ -6,6 +6,7 @@ export interface UrlRow {
   wait_for_selector: string | null; dwell_ms: number | null;
   last_fetched_at: string | null; content_hash: string | null;
   next_due_at: string | null; consecutive_challenges: number; backoff_until: string | null;
+  source: string | null;
 }
 export interface LeaseRow {
   lease_id: string; url: string; host: string; device_id: string;
@@ -39,15 +40,15 @@ export class PoolDeviceStore {
 export class PoolUrlRegistryStore {
   constructor(private readonly db: D1Database) {}
 
-  async upsert(u: { url: string; host: string; waitForSelector: string | null; dwellMs: number | null; tier?: string | null }): Promise<void> {
+  async upsert(u: { url: string; host: string; waitForSelector: string | null; dwellMs: number | null; tier?: string | null; source?: string | null }): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO pool_url_registry (url, host, enabled, tier, wait_for_selector, dwell_ms, consecutive_challenges)
-         VALUES (?, ?, 1, ?, ?, ?, 0)
+        `INSERT INTO pool_url_registry (url, host, enabled, tier, wait_for_selector, dwell_ms, consecutive_challenges, source)
+         VALUES (?, ?, 1, ?, ?, ?, 0, ?)
          ON CONFLICT(url) DO UPDATE SET host=excluded.host, tier=excluded.tier,
-           wait_for_selector=excluded.wait_for_selector, dwell_ms=excluded.dwell_ms`,
+           wait_for_selector=excluded.wait_for_selector, dwell_ms=excluded.dwell_ms, source=excluded.source`,
       )
-      .bind(u.url, u.host, u.tier ?? null, u.waitForSelector, u.dwellMs)
+      .bind(u.url, u.host, u.tier ?? null, u.waitForSelector, u.dwellMs, u.source ?? null)
       .run();
   }
 
