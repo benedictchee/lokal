@@ -11,6 +11,7 @@ export * from './lake/raw.js';
 export type { LakeWriter } from './lake/lake-writer.js';
 export { NdjsonR2LakeWriter } from './lake/ndjson-r2.js';
 export { bucketByR7, buildGroupBlobs } from './serving/blob-builder.js';
+export { mergeIntoR7Blob } from './serving/blob-merge.js';
 export { composeEmbedText } from './embed/embed-text.js';
 export { reviewFingerprint } from './reviews/fingerprint.js';
 export * from './reviews/critical-info.js';
