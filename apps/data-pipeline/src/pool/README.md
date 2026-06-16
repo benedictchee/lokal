@@ -42,3 +42,17 @@ IP-reputation-gated sources only — never red-tier.
   fetched, but does not yet enqueue it for server-side extraction into a `PulledRecord`.
   The existing `ENRICH` queue can't carry raw DOM as-is, so this needs its own extraction
   step. Wire it when the Android app starts delivering real DOM.
+
+## Track 2 — server-side DOM ingest (pilot)
+
+When a device uploads DOM (`POST /pool/results`), the coordinator:
+1. content-hashes the DOM and compares to `pool_url_registry.content_hash`;
+2. **unchanged** → parks the DOM, done; **changed** → enqueues `travel-extract` `{r2Key,url,source}`;
+3. the `travel-extract` consumer (`extract-consumer.ts`) loads the DOM, parses it (`linkedom`),
+   runs the owning connector's static-DOM `extract` (shared with the Playwright CLI via
+   `browser-strategy.ts`), and feeds records through `ingestPulledRecords` → merge → enrich.
+
+Pilot sources: `pilot-sources.ts` (the starter 7). Live data requires the Android fetcher app
+(`docs/superpowers/specs/2026-06-14-device-fetch-pool-design.md`); until then, exercise the pipe
+by `POST /pool/results` with captured DOM. Listing-page extractors yield name+url (no coords);
+detail-page/coordinate extraction is a per-connector follow-up.
