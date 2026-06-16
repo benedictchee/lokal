@@ -19,6 +19,7 @@
     "@travel/pipeline-core": "workspace:*",
     "@travel/proto-ts": "workspace:*",
     "h3-js": "^4.4.0",
+    "linkedom": "^0.18.12",
     "uuid": "^11.0.5"
   },
   "devDependencies": {

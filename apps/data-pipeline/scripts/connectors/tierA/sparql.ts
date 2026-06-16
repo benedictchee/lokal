@@ -41,6 +41,7 @@ export const wikidata = defineConnector({
       const m = /Point\(([-\d.]+) ([-\d.]+)\)/.exec(b.coord?.value ?? '');
       return mkRecord('wikidata', qid, { qid, label: b.itemLabel?.value, modified: b.modified?.value, coord: b.coord?.value }, {
         name: b.itemLabel?.value,
+        source_url: b.item!.value, // the canonical Wikidata entity URI
         updated_at: b.modified?.value,
         lng: m ? Number(m[1]) : undefined,
         lat: m ? Number(m[2]) : undefined,

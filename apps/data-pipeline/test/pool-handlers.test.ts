@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { env } from 'cloudflare:test';
 import migrationSql from '../migrations/0003_pool.sql?raw';
+import sourceSql from '../migrations/0005_pool_source.sql?raw';
 import { routePool } from '../src/pool/handlers.js';
 import { PoolDeviceStore, PoolUrlRegistryStore } from '../src/pool/pool-d1.js';
 import { sha256Hex } from '../src/pool/crypto.js';
@@ -10,6 +11,9 @@ const AUTH = 'Bearer dev-token';
 
 beforeAll(async () => {
   for (const stmt of migrationSql.split(';').map((s) => s.trim()).filter(Boolean)) {
+    await env.GROUPS.prepare(stmt).run();
+  }
+  for (const stmt of sourceSql.split(';').map((s) => s.trim()).filter(Boolean)) {
     await env.GROUPS.prepare(stmt).run();
   }
   await new PoolDeviceStore(env.GROUPS).provision('dev-h', await sha256Hex('dev-token'), '2026-06-14T00:00:00Z');

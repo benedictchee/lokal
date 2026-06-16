@@ -2,6 +2,7 @@ declare module 'cloudflare:test' {
   interface ProvidedEnv {
     GROUPS: D1Database;
     DATA: R2Bucket;
+    EXTRACT: Queue<import('../src/env.js').ExtractMessage>;
   }
 }
 

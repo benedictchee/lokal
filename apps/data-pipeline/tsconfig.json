@@ -10,5 +10,19 @@
     { "path": "../../packages/pipeline-core" },
     { "path": "../../packages/proto-ts" }
   ],
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "scripts/connectors/core/types.ts",
+    "scripts/connectors/core/connector.ts",
+    "scripts/connectors/core/fingerprint.ts",
+    "scripts/connectors/core/parse-html.ts",
+    "scripts/connectors/core/browser-strategy.ts",
+    "scripts/connectors/core/web.ts",
+    "scripts/connectors/tierA/sparql.ts",
+    "scripts/connectors/tierA/mediawiki.ts",
+    "scripts/connectors/tierA/geonames.ts",
+    "scripts/connectors/tierA/gov-open.ts",
+    "scripts/connectors/browser/starter.ts"
+  ]
 }

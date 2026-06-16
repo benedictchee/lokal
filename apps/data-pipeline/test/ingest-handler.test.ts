@@ -8,6 +8,7 @@ function makeEnv(token?: string): Env {
     DATA: {} as Env['DATA'],
     GROUPS: {} as Env['GROUPS'],
     ENRICH: {} as Env['ENRICH'],
+    EXTRACT: {} as Env['EXTRACT'],
     VECTORIZE: {} as Env['VECTORIZE'],
     AI: {} as Env['AI'],
     INGEST: {

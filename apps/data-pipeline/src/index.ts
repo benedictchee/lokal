@@ -1,7 +1,11 @@
 import { IngestRegion } from './workflows/ingest-region.js';
 import { enrichBatch } from './consumers/enrich.js';
-import type { Env, IngestParams, EnrichMessage } from './env.js';
+import { extractBatch } from './pool/extract-consumer.js';
+import type { Env, IngestParams, EnrichMessage, ExtractMessage } from './env.js';
 import { routePool } from './pool/handlers.js';
+import { runRefreshSource } from './refresh/run-refresh.js';
+import { REFRESH_SOURCES } from './refresh/sources.js';
+import { runDueRefreshes } from './refresh/schedule.js';
 
 // Default region seeded for cron re-ingest; ad-hoc runs override via POST body.
 // Convention: bbox = [south, west, north, east] (Overpass order).
@@ -86,27 +90,64 @@ export default {
       return Response.json({ id: instance.id, params }, { status: 202 });
     }
 
+    if (request.method === 'POST' && url.pathname === '/refresh') {
+      const ingestToken = env.INGEST_TOKEN;
+      if (!ingestToken) return new Response('unauthorized', { status: 401 });
+      const authHeader = request.headers.get('Authorization') ?? '';
+      if (!authHeader.startsWith('Bearer ')) return new Response('unauthorized', { status: 401 });
+      if (!(await timingSafeEqual(authHeader.slice('Bearer '.length), ingestToken))) {
+        return new Response('unauthorized', { status: 401 });
+      }
+
+      const body = (await request.json().catch(() => ({}))) as { source?: string };
+      const entry = body.source ? REFRESH_SOURCES[body.source] : undefined;
+      if (!entry) return new Response('bad request: unknown source', { status: 400 });
+
+      const summary = await runRefreshSource(
+        { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH },
+        entry.connector,
+        entry.mapping,
+        { dataVersion: Number(env.DATA_VERSION), nowIso: new Date().toISOString(), runId: crypto.randomUUID() },
+      );
+      return Response.json(summary, { status: 200 });
+    }
+
     return new Response('not found', { status: 404 });
   },
 
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const dataVersion = Number(env.DATA_VERSION);
+    // (1) Existing OSM region re-ingest.
     ctx.waitUntil(
       Promise.all(
         CRON_REGIONS.map((r) => env.INGEST.create({ params: { ...r, dataVersion } })),
       ).then(() => undefined),
     );
+    // (2) Refresh every open connector that is due (per-source cadence).
+    ctx.waitUntil(
+      runDueRefreshes(
+        { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH },
+        REFRESH_SOURCES,
+        { dataVersion, nowIso: new Date().toISOString() },
+      ).then(() => undefined),
+    );
   },
 
-  async queue(batch: MessageBatch<EnrichMessage>, env: Env): Promise<void> {
-    // DLQ is triage-only: log the dead messages and ack them so they do NOT
-    // re-run enrichBatch (which would just throw NonRetryableError again).
-    if (batch.queue === 'travel-enrich-dlq') {
-      for (const m of batch.messages) console.error('enrich DLQ', m.body);
+  async queue(batch: MessageBatch<EnrichMessage | ExtractMessage>, env: Env): Promise<void> {
+    if (batch.queue === 'travel-enrich-dlq' || batch.queue === 'travel-extract-dlq') {
+      for (const m of batch.messages) console.error(`${batch.queue}`, m.body);
       batch.ackAll();
       return;
     }
-    await enrichBatch(batch.messages.map((m) => m.body), env);
+    if (batch.queue === 'travel-extract') {
+      await extractBatch(
+        batch.messages.map((m) => m.body as ExtractMessage),
+        { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH },
+        Number(env.DATA_VERSION),
+      );
+      return;
+    }
+    await enrichBatch((batch.messages as Message<EnrichMessage>[]).map((m) => m.body), env);
   },
 };
 

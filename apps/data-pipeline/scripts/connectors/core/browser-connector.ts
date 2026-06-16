@@ -15,38 +15,11 @@
 import { defineConnector } from './connector.js';
 import { fnv1a, mkRecord, sourceFp } from './fingerprint.js';
 import { browserEnabled, scrapePage } from './browser.js';
-import type { IncrementalCapability, PullInput, SourceConnector, Tier } from './types.js';
+import type { PullInput, SourceConnector } from './types.js';
 import type { Page } from 'playwright';
-
-export interface ScrapedItem {
-  sourceId: string;
-  name?: string;
-  lat?: number;
-  lng?: number;
-  url?: string;
-  updated_at?: string;
-  raw?: unknown;
-}
-
-export interface BrowserStrategy {
-  id: string;
-  displayName: string;
-  tier: Tier;
-  coverage: string;
-  /** Why we scrape (no API / key-gated / licence-gated) — shown in plan.access. */
-  access: string;
-  /** Build the SINGLE listing/detail URL to visit. Keep it to one meaningful page. */
-  listUrl: (input: PullInput) => string;
-  /** CSS to wait for before extracting (optional). */
-  waitFor?: string;
-  consentSelectors?: string[];
-  incremental: IncrementalCapability;
-  /** Page-side extractor — returns the items found on the one page. */
-  extract: (page: Page, limit: number) => Promise<ScrapedItem[]>;
-  /** Env var holding a residential proxy / unblocker (default BROWSER_PROXY). */
-  proxyEnv?: string;
-  note?: string;
-}
+import { parseHtml } from './parse-html.js';
+export type { ScrapedItem, BrowserStrategy } from './browser-strategy.js';
+import type { BrowserStrategy } from './browser-strategy.js';
 
 export function defineBrowserConnector(s: BrowserStrategy): SourceConnector {
   return defineConnector({
@@ -71,7 +44,10 @@ export function defineBrowserConnector(s: BrowserStrategy): SourceConnector {
       const limit = Math.min(input.limit ?? 10, 25);
       const url = s.listUrl(input);
       const proxy = deps.env[s.proxyEnv ?? 'BROWSER_PROXY'];
-      const outcome = await scrapePage(url, (page) => s.extract(page, limit), {
+      const outcome = await scrapePage(url, async (page: Page) => {
+        const doc = parseHtml(await page.content());
+        return s.extract(doc, url, limit);
+      }, {
         timeoutMs: deps.timeoutMs - 4000,
         waitFor: s.waitFor,
         consentSelectors: s.consentSelectors,

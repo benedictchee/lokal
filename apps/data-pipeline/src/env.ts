@@ -13,10 +13,17 @@ export interface EnrichMessage {
   source: string;
 }
 
+export interface ExtractMessage {
+  r2Key: string;
+  url: string;
+  source: string;
+}
+
 export interface Env {
   DATA: R2Bucket;
   GROUPS: D1Database;
   ENRICH: Queue<EnrichMessage>;
+  EXTRACT: Queue<ExtractMessage>;
   VECTORIZE: VectorizeIndex;
   AI: Ai;
   INGEST: Workflow<IngestParams>;

@@ -5,8 +5,10 @@
   "compatibility_date": "2025-05-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Daily re-ingest of the seeded regions (scheduled handler in index.ts).
-  // Disabled during initial testing to avoid surprise daily ingests; re-add "0 3 * * *" for production.
+  // scheduled() does two things when a cron fires: re-ingest CRON_REGIONS (OSM)
+  // and refresh every due open connector (REFRESH_SOURCES, per-source cadence).
+  // Kept EMPTY by default: enabling starts real bge-m3 embedding + Vectorize
+  // spend. To enable a daily 03:00 UTC run, set: "crons": ["0 3 * * *"].
   "triggers": { "crons": [] },
 
   "vars": { "DATA_VERSION": "1" },
@@ -35,7 +37,10 @@
   // Enrich pipeline: producer (workflow enqueues) + consumer (queue handler -> enrichBatch),
   // with a dead-letter queue for NonRetryableError / exhausted retries.
   "queues": {
-    "producers": [{ "binding": "ENRICH", "queue": "travel-enrich" }],
+    "producers": [
+      { "binding": "ENRICH", "queue": "travel-enrich" },
+      { "binding": "EXTRACT", "queue": "travel-extract" }
+    ],
     "consumers": [
       {
         "queue": "travel-enrich",
@@ -51,7 +56,9 @@
         "max_batch_size": 10,
         "max_batch_timeout": 30,
         "max_retries": 1
-      }
+      },
+      { "queue": "travel-extract", "max_batch_size": 10, "max_batch_timeout": 10, "max_retries": 5, "dead_letter_queue": "travel-extract-dlq" },
+      { "queue": "travel-extract-dlq", "max_batch_size": 10, "max_batch_timeout": 30, "max_retries": 1 }
     ]
   },
 
