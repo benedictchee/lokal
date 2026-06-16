@@ -50,12 +50,19 @@ export function anchors(
   limit: number,
 ): ScrapedItem[] {
   return Array.from(doc.querySelectorAll(selector) as Iterable<ExtractEl>)
-    .slice(0, limit)
     .map((el) => {
       const raw = el.getAttribute('href') ?? '';
-      const href = raw ? new URL(raw, baseUrl).toString() : '';
+      let href = '';
+      if (raw) {
+        try {
+          href = new URL(raw, baseUrl).toString();
+        } catch {
+          href = '';
+        }
+      }
       const name = (el.textContent ?? '').trim().replace(/\s+/g, ' ');
       return { sourceId: href ? idFrom(href) : '', name, url: href, raw: { href, name } };
     })
-    .filter((x) => x.sourceId && x.name);
+    .filter((x) => x.sourceId && x.name)
+    .slice(0, limit);
 }
