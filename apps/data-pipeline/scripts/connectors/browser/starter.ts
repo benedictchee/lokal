@@ -10,31 +10,12 @@
  * More strategies are appended by the generator. Each connector visits exactly ONE
  * page per run; extractors must not paginate.
  */
-import { type BrowserStrategy } from '../core/browser-connector.js';
-import type { Page } from 'playwright';
+import { type BrowserStrategy, anchors } from '../core/browser-strategy.js';
 
 // Shared anchor extractor + incremental helpers, exported for generated modules to reuse.
 
 const full = (desc: string) => ({ method: 'full-only' as const, supported: true, description: desc });
 const sortNew = (desc: string) => ({ method: 'sort-by-updated' as const, supported: true, description: desc });
-
-/** Generic anchor extractor: map matching <a> to {sourceId,name,url}. */
-async function anchors(page: Page, selector: string, idFrom: (href: string) => string, limit: number) {
-  return page.$$eval(
-    selector,
-    (els, max) =>
-      els
-        .map((e) => {
-          const a = e as HTMLAnchorElement;
-          return { href: a.href, name: (a.textContent ?? '').trim().replace(/\s+/g, ' ') };
-        })
-        .filter((x) => x.href && x.name)
-        .slice(0, max as number),
-    limit,
-  ).then((rows) =>
-    rows.map((r) => ({ sourceId: idFrom(r.href), name: r.name, url: r.href, raw: r })),
-  );
-}
 
 const STRATEGIES: BrowserStrategy[] = [
   {
@@ -47,24 +28,17 @@ const STRATEGIES: BrowserStrategy[] = [
       `https://www.google.com/maps/search/${encodeURIComponent(input.region ?? 'restaurants in George Town Penang')}`,
     waitFor: 'div[role="feed"] a[href*="/maps/place/"]',
     incremental: full('No web sort-by-new; one search page per run, diff results by content_hash. Use the Places API date fields if a key is available.'),
-    // Google place anchors carry the name in aria-label (not text) — extract in-page.
-    extract: (page, limit) =>
-      page.$$eval(
-        'div[role="feed"] a[href*="/maps/place/"]',
-        (els, max) =>
-          els.slice(0, max as number).map((e) => {
-            const a = e as HTMLAnchorElement;
-            const href = a.href;
-            const m = href.match(/!19s(ChIJ[^!?&]+)/) || href.match(/\/place\/([^/]+)/);
-            return {
-              sourceId: m ? decodeURIComponent(m[1]) : href.slice(0, 80),
-              name: a.getAttribute('aria-label') ?? '',
-              url: href,
-              raw: { href, name: a.getAttribute('aria-label') ?? '' },
-            };
-          }),
-        limit,
-      ),
+    // Google place anchors carry the name in aria-label (not text) — query the static DOM.
+    extract: (doc, _baseUrl, limit) =>
+      [...doc.querySelectorAll('div[role="feed"] a[href*="/maps/place/"], div[role="feed"] a[href*="!19s"]')]
+        .slice(0, limit)
+        .map((a) => {
+          const href = a.getAttribute('href') ?? '';
+          const m = href.match(/!19s(ChIJ[^!?&]+)/) || href.match(/\/place\/([^/]+)/);
+          const name = a.getAttribute('aria-label') ?? '';
+          return { sourceId: m ? decodeURIComponent(m[1]!) : href.slice(0, 80), name, url: href, raw: { href, name } };
+        })
+        .filter((x) => x.name),
   },
   {
     id: 'tabelog',
@@ -75,8 +49,8 @@ const STRATEGIES: BrowserStrategy[] = [
     listUrl: (input) => `https://tabelog.com/en/${input.region ?? 'kanagawa'}/`,
     waitFor: 'a.list-rst__rst-name-target',
     incremental: full('One area listing page per run; diff restaurant set by content_hash. Tabelog has no updated_since.'),
-    extract: (page, limit) =>
-      anchors(page, 'a.list-rst__rst-name-target', (href) => href.replace(/^https?:\/\/tabelog\.com/, '').replace(/\/$/, ''), limit),
+    extract: (doc, baseUrl, limit) =>
+      anchors(doc, baseUrl, 'a.list-rst__rst-name-target', (href) => href.replace(/^https?:\/\/tabelog\.com/, '').replace(/\/$/, ''), limit),
   },
   {
     id: 'wongnai',
@@ -87,8 +61,8 @@ const STRATEGIES: BrowserStrategy[] = [
     listUrl: () => 'https://www.wongnai.com/restaurants',
     waitFor: 'a[href*="/restaurants/"]',
     incremental: sortNew('Listing supports recency ordering; one page per run, stop at items older than since on later builds.'),
-    extract: (page, limit) =>
-      anchors(page, 'a[href*="/restaurants/"]', (href) => (href.match(/\/restaurants\/([^/?#]+)/)?.[1] ?? href).slice(0, 80), limit),
+    extract: (doc, baseUrl, limit) =>
+      anchors(doc, baseUrl, 'a[href*="/restaurants/"]', (href) => (href.match(/\/restaurants\/([^/?#]+)/)?.[1] ?? href).slice(0, 80), limit),
   },
   {
     id: '2gis',
@@ -100,7 +74,7 @@ const STRATEGIES: BrowserStrategy[] = [
     waitFor: 'a[href*="/firm/"]',
     incremental: full('One SPA search page per run; diff firm set by content_hash.'),
     note: 'SPA — if 0 items, the firm list renders late; increase wait or target the result container.',
-    extract: (page, limit) => anchors(page, 'a[href*="/firm/"]', (href) => href.match(/\/firm\/(\d+)/)?.[1] ?? href, limit),
+    extract: (doc, baseUrl, limit) => anchors(doc, baseUrl, 'a[href*="/firm/"]', (href) => href.match(/\/firm\/(\d+)/)?.[1] ?? href, limit),
   },
   {
     id: 'yelp',
@@ -112,7 +86,7 @@ const STRATEGIES: BrowserStrategy[] = [
     waitFor: 'h3 a[href*="/biz/"]',
     incremental: full('One search page per run; diff by content_hash.'),
     note: 'DataDome-protected: needs BROWSER_PROXY (residential/unblocker) from a datacenter IP.',
-    extract: (page, limit) => anchors(page, 'a[href*="/biz/"]', (href) => href.match(/\/biz\/([^/?#]+)/)?.[1] ?? href, limit),
+    extract: (doc, baseUrl, limit) => anchors(doc, baseUrl, 'a[href*="/biz/"]', (href) => href.match(/\/biz\/([^/?#]+)/)?.[1] ?? href, limit),
   },
   {
     id: 'tripadvisor',
@@ -124,7 +98,7 @@ const STRATEGIES: BrowserStrategy[] = [
     waitFor: 'a[href*="/Restaurant_Review"]',
     incremental: full('One list page per run; diff by content_hash.'),
     note: 'DataDome-protected: needs BROWSER_PROXY (residential/unblocker).',
-    extract: (page, limit) => anchors(page, 'a[href*="/Restaurant_Review"]', (href) => href.match(/-d(\d+)-/)?.[1] ?? href, limit),
+    extract: (doc, baseUrl, limit) => anchors(doc, baseUrl, 'a[href*="/Restaurant_Review"]', (href) => href.match(/-d(\d+)-/)?.[1] ?? href, limit),
   },
   {
     id: 'atlas-obscura-web',
@@ -136,7 +110,7 @@ const STRATEGIES: BrowserStrategy[] = [
     waitFor: 'a[href*="/places/"]',
     incremental: full('One listing page per run; diff by content_hash.'),
     note: 'Cloudflare-managed challenge: needs BROWSER_PROXY (residential) / headed solve.',
-    extract: (page, limit) => anchors(page, 'a[href*="/places/"]', (href) => href.match(/\/places\/([a-z0-9-]+)$/)?.[1] ?? href, limit),
+    extract: (doc, baseUrl, limit) => anchors(doc, baseUrl, 'a[href*="/places/"]', (href) => href.match(/\/places\/([a-z0-9-]+)$/)?.[1] ?? href, limit),
   },
 ];
 

@@ -22,6 +22,7 @@
     "scripts/connectors/tierA/sparql.ts",
     "scripts/connectors/tierA/mediawiki.ts",
     "scripts/connectors/tierA/geonames.ts",
-    "scripts/connectors/tierA/gov-open.ts"
+    "scripts/connectors/tierA/gov-open.ts",
+    "scripts/connectors/browser/starter.ts"
   ]
 }
