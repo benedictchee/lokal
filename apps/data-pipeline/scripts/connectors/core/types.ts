@@ -81,6 +81,8 @@ export interface PulledRecord {
   record_uuid: string;
   /** fnv1a hash of the canonical content → per-record delta key (dedup elsewhere). */
   content_hash: string;
+  /** API endpoint or page URL this item came from (flows into TravelRecord.source_url). */
+  source_url?: string;
   /** Source-reported last-update, if the source exposes one. */
   updated_at?: string;
   name?: string;

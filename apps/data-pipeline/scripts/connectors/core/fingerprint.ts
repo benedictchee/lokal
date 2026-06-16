@@ -31,7 +31,7 @@ export function mkRecord(
   connectorId: string,
   sourceId: string,
   content: unknown,
-  extra: Partial<Pick<PulledRecord, 'updated_at' | 'name' | 'lat' | 'lng' | 'raw'>> = {},
+  extra: Partial<Pick<PulledRecord, 'updated_at' | 'name' | 'lat' | 'lng' | 'raw' | 'source_url'>> = {},
 ): PulledRecord {
   return {
     source_id: sourceId,

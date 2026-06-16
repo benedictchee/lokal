@@ -10,5 +10,10 @@
     { "path": "../../packages/pipeline-core" },
     { "path": "../../packages/proto-ts" }
   ],
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "scripts/connectors/core/types.ts",
+    "scripts/connectors/core/fingerprint.ts"
+  ]
 }
