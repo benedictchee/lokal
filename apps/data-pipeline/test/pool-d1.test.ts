@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { env } from 'cloudflare:test';
 import migrationSql from '../migrations/0003_pool.sql?raw';
+import sourceSql from '../migrations/0005_pool_source.sql?raw';
 import { PoolDeviceStore, PoolUrlRegistryStore, PoolLeaseStore } from '../src/pool/pool-d1.js';
 
-// Apply the pool migration once against the isolated-per-suite D1 (env.GROUPS),
+// Apply the pool migrations once against the isolated-per-suite D1 (env.GROUPS),
 // mirroring reviews-d1.test.ts's ?raw + split-on-';' application pattern.
 beforeAll(async () => {
   for (const stmt of migrationSql.split(';').map((s) => s.trim()).filter(Boolean)) {
+    await env.GROUPS.prepare(stmt).run();
+  }
+  for (const stmt of sourceSql.split(';').map((s) => s.trim()).filter(Boolean)) {
     await env.GROUPS.prepare(stmt).run();
   }
 });
