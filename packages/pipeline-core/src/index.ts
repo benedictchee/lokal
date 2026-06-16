@@ -15,6 +15,8 @@ export { composeEmbedText } from './embed/embed-text.js';
 export { reviewFingerprint } from './reviews/fingerprint.js';
 export * from './reviews/critical-info.js';
 export { osmElementToRecord } from './normalize/osm.js';
+export { pulledToNormalized } from './normalize/connector.js';
+export type { PulledRecordLike, ConnectorMapping } from './normalize/connector.js';
 export { gtfsStopToRecord, routeTypeToCategory } from './normalize/gtfs.js';
 export type { GtfsStop, GtfsStopOpts } from './normalize/gtfs.js';
 export { googlePlaceToRecord } from './normalize/google.js';
