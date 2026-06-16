@@ -15,8 +15,11 @@ const EXTRACT_LIMIT = 25;
  * owning connector's static-DOM extractor, and feed the records through the shared
  * record-level ingest. Unrecoverable input (missing object, unknown source,
  * unparseable DOM) throws NonRetryableError → DLQ.
+ *
+ * `dataVersion` is threaded explicitly (like every other ingest caller) so device
+ * records carry the configured DATA_VERSION — not a hard-coded default.
  */
-export async function extractBatch(msgs: ExtractMessage[], env: RefreshEnv): Promise<void> {
+export async function extractBatch(msgs: ExtractMessage[], env: RefreshEnv, dataVersion: number): Promise<void> {
   for (const msg of msgs) {
     const pilot = PILOT_SOURCES[msg.source];
     if (!pilot) throw new NonRetryableError(`extract: unknown source "${msg.source}" for ${msg.url}`);
@@ -43,7 +46,7 @@ export async function extractBatch(msgs: ExtractMessage[], env: RefreshEnv): Pro
 
     const nowIso = new Date().toISOString();
     await ingestPulledRecords(env, msg.source, pilot.mapping, records, {
-      dataVersion: Number((env as unknown as { DATA_VERSION?: string }).DATA_VERSION ?? 1),
+      dataVersion,
       nowIso,
       runId: crypto.randomUUID(),
     });

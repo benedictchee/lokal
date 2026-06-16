@@ -140,7 +140,11 @@ export default {
       return;
     }
     if (batch.queue === 'travel-extract') {
-      await extractBatch(batch.messages.map((m) => m.body as ExtractMessage), { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH });
+      await extractBatch(
+        batch.messages.map((m) => m.body as ExtractMessage),
+        { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH },
+        Number(env.DATA_VERSION),
+      );
       return;
     }
     await enrichBatch((batch.messages as Message<EnrichMessage>[]).map((m) => m.body), env);
