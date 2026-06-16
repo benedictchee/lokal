@@ -17,6 +17,9 @@
     "scripts/connectors/core/connector.ts",
     "scripts/connectors/core/fingerprint.ts",
     "scripts/connectors/core/web.ts",
-    "scripts/connectors/tierA/sparql.ts"
+    "scripts/connectors/tierA/sparql.ts",
+    "scripts/connectors/tierA/mediawiki.ts",
+    "scripts/connectors/tierA/geonames.ts",
+    "scripts/connectors/tierA/gov-open.ts"
   ]
 }

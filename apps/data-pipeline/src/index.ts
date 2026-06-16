@@ -3,9 +3,7 @@ import { enrichBatch } from './consumers/enrich.js';
 import type { Env, IngestParams, EnrichMessage } from './env.js';
 import { routePool } from './pool/handlers.js';
 import { runRefreshSource } from './refresh/run-refresh.js';
-import { wikidata } from '../scripts/connectors/tierA/sparql.js';
-import type { SourceConnector } from '../scripts/connectors/core/types.js';
-import type { ConnectorMapping } from '@travel/pipeline-core';
+import { REFRESH_SOURCES } from './refresh/sources.js';
 
 // Default region seeded for cron re-ingest; ad-hoc runs override via POST body.
 // Convention: bbox = [south, west, north, east] (Overpass order).
@@ -22,12 +20,6 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
   const bBytes = enc.encode(b);
   return crypto.subtle.timingSafeEqual(aBytes, bBytes);
 }
-
-// Phase 1 wires API connectors only, imported individually to keep Playwright
-// (browser/strategies.ts) out of the Worker bundle.
-const REFRESH_SOURCES: Record<string, { connector: SourceConnector; mapping: ConnectorMapping }> = {
-  wikidata: { connector: wikidata, mapping: { subject: 'poi', category: 'attraction' } },
-};
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
