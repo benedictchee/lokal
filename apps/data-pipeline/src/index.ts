@@ -4,6 +4,7 @@ import type { Env, IngestParams, EnrichMessage } from './env.js';
 import { routePool } from './pool/handlers.js';
 import { runRefreshSource } from './refresh/run-refresh.js';
 import { REFRESH_SOURCES } from './refresh/sources.js';
+import { runDueRefreshes } from './refresh/schedule.js';
 
 // Default region seeded for cron re-ingest; ad-hoc runs override via POST body.
 // Convention: bbox = [south, west, north, east] (Overpass order).
@@ -115,9 +116,18 @@ export default {
 
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const dataVersion = Number(env.DATA_VERSION);
+    // (1) Existing OSM region re-ingest.
     ctx.waitUntil(
       Promise.all(
         CRON_REGIONS.map((r) => env.INGEST.create({ params: { ...r, dataVersion } })),
+      ).then(() => undefined),
+    );
+    // (2) Refresh every open connector that is due (per-source cadence).
+    ctx.waitUntil(
+      runDueRefreshes(
+        { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH },
+        REFRESH_SOURCES,
+        { dataVersion, nowIso: new Date().toISOString() },
       ).then(() => undefined),
     );
   },
