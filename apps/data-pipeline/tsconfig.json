@@ -14,6 +14,7 @@
     "src/**/*.ts",
     "test/**/*.ts",
     "scripts/connectors/core/types.ts",
+    "scripts/connectors/core/connector.ts",
     "scripts/connectors/core/fingerprint.ts"
   ]
 }
