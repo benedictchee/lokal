@@ -1,6 +1,7 @@
 import { IngestRegion } from './workflows/ingest-region.js';
 import { enrichBatch } from './consumers/enrich.js';
-import type { Env, IngestParams, EnrichMessage } from './env.js';
+import { extractBatch } from './pool/extract-consumer.js';
+import type { Env, IngestParams, EnrichMessage, ExtractMessage } from './env.js';
 import { routePool } from './pool/handlers.js';
 import { runRefreshSource } from './refresh/run-refresh.js';
 import { REFRESH_SOURCES } from './refresh/sources.js';
@@ -132,15 +133,17 @@ export default {
     );
   },
 
-  async queue(batch: MessageBatch<EnrichMessage>, env: Env): Promise<void> {
-    // DLQ is triage-only: log the dead messages and ack them so they do NOT
-    // re-run enrichBatch (which would just throw NonRetryableError again).
-    if (batch.queue === 'travel-enrich-dlq') {
-      for (const m of batch.messages) console.error('enrich DLQ', m.body);
+  async queue(batch: MessageBatch<EnrichMessage | ExtractMessage>, env: Env): Promise<void> {
+    if (batch.queue === 'travel-enrich-dlq' || batch.queue === 'travel-extract-dlq') {
+      for (const m of batch.messages) console.error(`${batch.queue}`, m.body);
       batch.ackAll();
       return;
     }
-    await enrichBatch(batch.messages.map((m) => m.body), env);
+    if (batch.queue === 'travel-extract') {
+      await extractBatch(batch.messages.map((m) => m.body as ExtractMessage), { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH });
+      return;
+    }
+    await enrichBatch((batch.messages as Message<EnrichMessage>[]).map((m) => m.body), env);
   },
 };
 
