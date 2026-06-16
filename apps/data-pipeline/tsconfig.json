@@ -15,6 +15,8 @@
     "test/**/*.ts",
     "scripts/connectors/core/types.ts",
     "scripts/connectors/core/connector.ts",
-    "scripts/connectors/core/fingerprint.ts"
+    "scripts/connectors/core/fingerprint.ts",
+    "scripts/connectors/core/web.ts",
+    "scripts/connectors/tierA/sparql.ts"
   ]
 }

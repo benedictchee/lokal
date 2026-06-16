@@ -15,7 +15,10 @@ import type { EnrichMessage } from '../env.js';
 export interface RefreshEnv {
   DATA: R2Bucket;
   GROUPS: D1Database;
-  ENRICH: { sendBatch(msgs: { body: EnrichMessage }[]): Promise<void> };
+  // Return type is `unknown` (not `void`) so the real `Queue<EnrichMessage>`
+  // binding — whose `sendBatch` resolves to a `QueueSendBatchResponse` — is
+  // structurally assignable here, while test fakes resolving to `void` stay valid.
+  ENRICH: { sendBatch(msgs: { body: EnrichMessage }[]): Promise<unknown> };
 }
 
 export interface RefreshContext {

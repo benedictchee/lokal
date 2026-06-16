@@ -2,6 +2,10 @@ import { IngestRegion } from './workflows/ingest-region.js';
 import { enrichBatch } from './consumers/enrich.js';
 import type { Env, IngestParams, EnrichMessage } from './env.js';
 import { routePool } from './pool/handlers.js';
+import { runRefreshSource } from './refresh/run-refresh.js';
+import { wikidata } from '../scripts/connectors/tierA/sparql.js';
+import type { SourceConnector } from '../scripts/connectors/core/types.js';
+import type { ConnectorMapping } from '@travel/pipeline-core';
 
 // Default region seeded for cron re-ingest; ad-hoc runs override via POST body.
 // Convention: bbox = [south, west, north, east] (Overpass order).
@@ -18,6 +22,12 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
   const bBytes = enc.encode(b);
   return crypto.subtle.timingSafeEqual(aBytes, bBytes);
 }
+
+// Phase 1 wires API connectors only, imported individually to keep Playwright
+// (browser/strategies.ts) out of the Worker bundle.
+const REFRESH_SOURCES: Record<string, { connector: SourceConnector; mapping: ConnectorMapping }> = {
+  wikidata: { connector: wikidata, mapping: { subject: 'poi', category: 'attraction' } },
+};
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -84,6 +94,28 @@ export default {
       };
       const instance = await env.INGEST.create({ params });
       return Response.json({ id: instance.id, params }, { status: 202 });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/refresh') {
+      const ingestToken = env.INGEST_TOKEN;
+      if (!ingestToken) return new Response('unauthorized', { status: 401 });
+      const authHeader = request.headers.get('Authorization') ?? '';
+      if (!authHeader.startsWith('Bearer ')) return new Response('unauthorized', { status: 401 });
+      if (!(await timingSafeEqual(authHeader.slice('Bearer '.length), ingestToken))) {
+        return new Response('unauthorized', { status: 401 });
+      }
+
+      const body = (await request.json().catch(() => ({}))) as { source?: string };
+      const entry = body.source ? REFRESH_SOURCES[body.source] : undefined;
+      if (!entry) return new Response('bad request: unknown source', { status: 400 });
+
+      const summary = await runRefreshSource(
+        { DATA: env.DATA, GROUPS: env.GROUPS, ENRICH: env.ENRICH },
+        entry.connector,
+        entry.mapping,
+        { dataVersion: Number(env.DATA_VERSION), nowIso: new Date().toISOString(), runId: crypto.randomUUID() },
+      );
+      return Response.json(summary, { status: 200 });
     }
 
     return new Response('not found', { status: 404 });
