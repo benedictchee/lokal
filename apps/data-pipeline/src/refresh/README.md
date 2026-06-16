@@ -13,3 +13,18 @@ Re-scrapes earlier data on demand and ingests only what changed.
 Phase 2 (browser connectors via the device pool + server-side DOM extractor) and
 Phase 3 (deletions/tombstones, cadence, observability, lake compaction) are separate.
 See `docs/superpowers/specs/2026-06-16-connector-refresh-loop-design.md`.
+
+## Track 1 — open sources on a schedule
+
+Six open, keyless connectors are registered in `sources.ts` and refresh on a per-source
+cadence (24h): `wikidata`, `dbpedia`, `wikipedia`, `wikivoyage`, `geonames`, `socrata-us`.
+
+- Manual: `POST /refresh {"source":"dbpedia"}` (Bearer INGEST_TOKEN) runs one source now.
+- Scheduled: when a cron fires, `scheduled()` refreshes every **due** source via
+  `runDueRefreshes` (`schedule.ts`). Cron is **disabled by default** (`wrangler.jsonc`
+  `"crons": []`); enable a daily run with `"crons": ["0 3 * * *"]` — note this starts real
+  embedding + Vectorize spend.
+
+Browser/fallback + keyed/licensed sources are NOT here (they need the device pool / secrets) —
+see Track 2 / Phase 2. The connector queries are prototype-grade samples; comprehensive
+per-source pulls are a separate follow-up.
